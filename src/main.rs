@@ -3,15 +3,29 @@
 
 use std::error::Error;
 
-slint::include_modules!();
+// Slint's generated bindings use internal toolkit invariants. Scope this lint
+// exception to generated code; application callbacks live outside this module.
+#[allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::todo,
+    clippy::unimplemented
+)]
+mod generated {
+    slint::include_modules!();
+}
+use generated::AppWindow;
+use slint::ComponentHandle;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let ui = AppWindow::new()?;
 
     let ui_handle = ui.as_weak();
     ui.on_request_increase_value(move || {
-        let ui = ui_handle.unwrap();
-        ui.set_counter(ui.get_counter() + 1);
+        if let Some(ui) = ui_handle.upgrade() {
+            ui.set_counter(ui.get_counter().saturating_add(1));
+        }
     });
 
     ui.run()?;
