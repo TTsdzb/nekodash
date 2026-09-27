@@ -526,12 +526,17 @@ async fn batch_checks_concurrency_and_cancellation() -> TestResult {
         .collect();
     let cancel = CancellationToken::new();
     let results = client.test_batch(probes.clone(), 2, &cancel).await?;
-    assert_eq!(results.len(), 7);
-    assert_eq!(results.iter().filter(|r| r.result.is_err()).count(), 1);
+    assert_eq!(results.results.len(), 7);
+    assert_eq!(results.total, 7);
+    assert!(!results.cancelled);
+    assert_eq!(
+        results.results.iter().filter(|r| r.result.is_err()).count(),
+        1
+    );
     assert_eq!(maximum.load(Ordering::SeqCst), 2);
     cancel.cancel();
-    assert!(
-        matches!(client.test_batch(probes,2,&cancel).await,Err(e) if e.kind==ErrorKind::Cancelled)
-    );
+    let cancelled = client.test_batch(probes, 2, &cancel).await?;
+    assert!(cancelled.cancelled);
+    assert!(cancelled.results.is_empty());
     Ok(())
 }

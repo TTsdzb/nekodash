@@ -1,10 +1,9 @@
 use crate::{Endpoint, Error, ErrorKind, Result, models::*};
-use futures_util::{StreamExt, stream};
+use futures_util::StreamExt;
 use reqwest::{Method, header::AUTHORIZATION};
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
-use tokio_util::sync::CancellationToken;
 
 #[derive(Clone, Debug)]
 pub struct ClientOptions {
@@ -66,12 +65,6 @@ pub struct Probe {
     pub timeout_ms: u32,
 }
 
-#[derive(Clone, Debug)]
-pub struct ProbeResult {
-    pub probe: Probe,
-    pub result: Result<Delay>,
-}
-
 impl CoreClient {
     pub fn new(endpoint: Endpoint) -> Result<Self> {
         Self::with_options(endpoint, ClientOptions::default())
@@ -107,6 +100,10 @@ impl CoreClient {
 
     pub fn endpoint(&self) -> &Endpoint {
         &self.endpoint
+    }
+
+    pub(crate) fn renewed(&self) -> Result<Self> {
+        Self::with_options(self.endpoint.clone(), self.options.clone())
     }
 
     async fn request(
@@ -441,32 +438,6 @@ impl CoreClient {
             )),
         )
         .await
-    }
-
-    /// Bounded concurrency; each result retains its own failure. Cancellation drops in-flight reads.
-    pub async fn test_batch(
-        &self,
-        probes: Vec<Probe>,
-        concurrency: usize,
-        cancel: &CancellationToken,
-    ) -> Result<Vec<ProbeResult>> {
-        if !(1..=32).contains(&concurrency) {
-            return Err(Error::invalid("probe concurrency must be between 1 and 32"));
-        }
-        let mut pending = stream::iter(probes)
-            .map(|probe| async move {
-                let result = self.test_proxy(&probe).await;
-                ProbeResult { probe, result }
-            })
-            .buffer_unordered(concurrency);
-        let mut completed = Vec::new();
-        loop {
-            tokio::select! {
-                biased;
-                _ = cancel.cancelled() => return Err(Error::cancelled()),
-                next = pending.next() => match next { Some(result) => completed.push(result), None => return Ok(completed) },
-            }
-        }
     }
 
     pub async fn set_rule_disabled(&self, index: u64, disabled: bool) -> Result<()> {

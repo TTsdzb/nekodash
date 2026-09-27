@@ -1,11 +1,22 @@
-use crate::{ClientOptions, CoreClient, Endpoint, Error, Result};
+use crate::{
+    BatchEvent, BatchTest, ClientOptions, CoreClient, Endpoint, Error, Probe, Result, StreamEvent,
+    StreamKind, StreamOptions, Subscription,
+};
 use std::future::Future;
+use tokio::runtime::Handle;
 use tokio_util::sync::CancellationToken;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SessionToken {
     pub endpoint_id: String,
     pub generation: u64,
+}
+
+/// Every outcome carries its origin, including cancellation and receive errors.
+#[derive(Clone, Debug)]
+pub struct SessionEvent<T> {
+    pub token: SessionToken,
+    pub result: Result<T>,
 }
 
 #[derive(Clone)]
@@ -17,12 +28,91 @@ pub struct RequestContext {
 
 impl RequestContext {
     /// Tag asynchronous results so a GUI can discard callbacks queued before an endpoint switch.
-    pub async fn run<T>(&self, work: impl Future<Output = Result<T>>) -> Result<(SessionToken, T)> {
-        tokio::select! {
+    pub async fn run<T>(&self, work: impl Future<Output = Result<T>>) -> SessionEvent<T> {
+        let result = tokio::select! {
             biased;
             _ = self.cancel.cancelled() => Err(Error::cancelled()),
-            value = work => Ok((self.token.clone(), value?)),
+            value = work => value,
+        };
+        self.event(result)
+    }
+
+    pub(crate) fn event<T>(&self, result: Result<T>) -> SessionEvent<T> {
+        SessionEvent {
+            token: self.token.clone(),
+            result,
         }
+    }
+
+    pub fn subscribe(
+        &self,
+        runtime: &Handle,
+        kind: StreamKind,
+        options: StreamOptions,
+    ) -> SessionEvent<SessionSubscription> {
+        self.event(
+            self.client
+                .subscribe(runtime, kind, options, &self.cancel)
+                .map(|subscription| SessionSubscription {
+                    token: self.token.clone(),
+                    subscription,
+                }),
+        )
+    }
+
+    pub fn batch_tests(
+        &self,
+        probes: Vec<Probe>,
+        concurrency: usize,
+    ) -> SessionEvent<SessionBatch> {
+        self.event(
+            self.client
+                .batch_tests(probes, concurrency, &self.cancel)
+                .map(|batch| SessionBatch {
+                    token: self.token.clone(),
+                    batch,
+                }),
+        )
+    }
+}
+
+pub struct SessionSubscription {
+    token: SessionToken,
+    subscription: Subscription,
+}
+
+impl SessionSubscription {
+    pub async fn recv(&mut self) -> SessionEvent<StreamEvent> {
+        SessionEvent {
+            token: self.token.clone(),
+            result: self.subscription.recv().await,
+        }
+    }
+    pub fn cancel(&self) {
+        self.subscription.cancel();
+    }
+    pub fn is_finished(&self) -> bool {
+        self.subscription.is_finished()
+    }
+}
+
+pub struct SessionBatch {
+    token: SessionToken,
+    batch: BatchTest,
+}
+
+impl SessionBatch {
+    pub async fn recv(&mut self) -> Option<SessionEvent<BatchEvent>> {
+        self.batch.recv().await.map(|event| SessionEvent {
+            token: self.token.clone(),
+            result: Ok(event),
+        })
+    }
+    pub fn cancel(&self) {
+        self.batch.cancel();
+    }
+    pub fn is_finished(&self) -> bool {
+        self.batch.is_finished()
     }
 }
 
@@ -35,6 +125,21 @@ pub struct Session {
 impl Session {
     pub fn switch(&mut self, endpoint: Endpoint, options: ClientOptions) -> Result<RequestContext> {
         let client = CoreClient::with_options(endpoint, options)?;
+        self.activate(client)
+    }
+
+    /// Renew the generation and HTTP pool after a network change, resume or core restart.
+    pub fn reconnect(&mut self) -> Result<RequestContext> {
+        let client = self
+            .active
+            .as_ref()
+            .ok_or_else(|| Error::invalid("no active session to reconnect"))?
+            .client
+            .renewed()?;
+        self.activate(client)
+    }
+
+    fn activate(&mut self, client: CoreClient) -> Result<RequestContext> {
         let generation = self
             .generation
             .checked_add(1)

@@ -4,8 +4,9 @@ mod common;
 use axum::response::IntoResponse;
 use common::{Server, TestResult, empty};
 use nekodash_core::{
-    CancellationToken, CoreClient, Endpoint, MaintenanceAction, Probe, StreamData, StreamEvent,
-    StreamKind, StreamOptions, StreamState, models::LogLevel,
+    CancellationToken, ClientOptions, CommandOutcome, CoreClient, Endpoint, MaintenanceAction,
+    Probe, RecoveryOptions, Session, StreamData, StreamEvent, StreamKind, StreamOptions,
+    StreamState, models::LogLevel,
 };
 use serde_json::json;
 use std::{process::Stdio, time::Duration};
@@ -332,6 +333,56 @@ rules:
         ));
         client.reload_config().await?;
         client.version().await?;
+        let mut session = Session::default();
+        let original = session.switch(client.endpoint().clone(), ClientOptions::default())?;
+        let report = session
+            .maintain(MaintenanceAction::FlushDns, RecoveryOptions::default())?
+            .run()
+            .await;
+        assert!(!session.accepts(&original.token));
+        assert!(session.accepts(&report.token));
+        let report = report.result?;
+        assert!(matches!(report.command, Some(CommandOutcome::Acknowledged)));
+        assert!(report.snapshot?.is_complete());
+
+        // Linux Mihomo restarts with exec, retaining this test's child PID for cleanup.
+        // Other platforms need a process-tree harness to own any replacement child.
+        #[cfg(target_os = "linux")]
+        {
+            let operation =
+                session.maintain(MaintenanceAction::Restart, RecoveryOptions::default())?;
+            let refreshed = operation.context().clone();
+            let event = operation.run().await;
+            assert!(session.accepts(&event.token));
+            let report = event.result?;
+            assert!(matches!(report.command, Some(CommandOutcome::Acknowledged)));
+            let snapshot = report.snapshot?;
+            assert!(snapshot.is_complete());
+            assert_eq!(snapshot.version.version, version.version);
+            assert!(process.try_wait()?.is_none());
+            let mut traffic = refreshed
+                .subscribe(
+                    &tokio::runtime::Handle::current(),
+                    StreamKind::Traffic,
+                    StreamOptions::default(),
+                )
+                .result?;
+            tokio::time::timeout(Duration::from_secs(5), async {
+                loop {
+                    let event = traffic.recv().await;
+                    assert!(session.accepts(&event.token));
+                    match event.result? {
+                        StreamEvent::Data(data) => {
+                            assert!(matches!(data.as_ref(), StreamData::Traffic(_)));
+                            return Ok::<_, nekodash_core::Error>(());
+                        }
+                        StreamEvent::Error(error) => return Err(error),
+                        _ => {}
+                    }
+                }
+            })
+            .await??;
+        }
         Ok(())
     }
     .await;

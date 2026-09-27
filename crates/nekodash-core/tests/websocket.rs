@@ -10,8 +10,9 @@ use axum::{
 };
 use futures_util::future::BoxFuture;
 use nekodash_core::{
-    CancellationToken, CoreClient, Endpoint, ErrorKind, StreamData, StreamEvent, StreamKind,
-    StreamOptions, StreamState, Subscription, models::LogLevel,
+    CancellationToken, ClientOptions, CoreClient, Endpoint, ErrorKind, RecoveryOptions, Session,
+    StreamData, StreamEvent, StreamKind, StreamOptions, StreamState, Subscription,
+    models::LogLevel,
 };
 use std::{
     future::Future,
@@ -442,17 +443,112 @@ async fn bounded_queue_reports_lost_events() -> TestResult {
         while socket.recv().await.is_some() {}
     })
     .await?;
-    let mut sub = server.client()?.subscribe(
+    let mut session = Session::default();
+    let context = session.switch(
+        Endpoint::new("ws", "", &server.url, "secret &/%")?,
+        ClientOptions::default(),
+    )?;
+    let invalid = context.subscribe(
         &tokio::runtime::Handle::current(),
         StreamKind::Memory,
         StreamOptions {
-            queue_capacity: 2,
+            queue_capacity: 0,
             ..options()
         },
-        &CancellationToken::new(),
-    )?;
+    );
+    assert!(session.accepts(&invalid.token));
+    assert!(matches!(invalid.result, Err(error) if error.kind == ErrorKind::InvalidInput));
+    let mut sub = context
+        .subscribe(
+            &tokio::runtime::Handle::current(),
+            StreamKind::Memory,
+            StreamOptions {
+                queue_capacity: 2,
+                ..options()
+            },
+        )
+        .result?;
     tokio::time::sleep(Duration::from_millis(100)).await;
-    assert!(matches!(sub.recv().await,Err(e) if e.kind==ErrorKind::Lagged));
+    let event = sub.recv().await;
+    assert!(session.accepts(&event.token));
+    assert!(matches!(event.result,Err(e) if e.kind==ErrorKind::Lagged));
+    session.reconnect()?;
+    assert!(!session.accepts(&event.token));
+    Ok(())
+}
+
+#[tokio::test]
+async fn recovery_invalidates_old_stream_events_and_reopens_scoped_subscriptions() -> TestResult {
+    let server = WsServer::start(false, |mut socket| async move {
+        let _ = socket.send(Message::Text("bad json".into())).await;
+        let _ = socket.send(Message::Text(r#"{"inuse":42}"#.into())).await;
+        while socket.recv().await.is_some() {}
+    })
+    .await?;
+    let mut session = Session::default();
+    let context = session.switch(
+        Endpoint::new("ws", "", &server.url, "secret &/%")?,
+        ClientOptions::default(),
+    )?;
+    let mut old = context
+        .subscribe(
+            &tokio::runtime::Handle::current(),
+            StreamKind::Memory,
+            options(),
+        )
+        .result?;
+    let mut saw_decode = false;
+    let queued = loop {
+        let event = tokio::time::timeout(Duration::from_secs(2), old.recv()).await?;
+        assert!(session.accepts(&event.token));
+        match &event.result {
+            Ok(StreamEvent::Error(error)) if error.kind == ErrorKind::Decode => saw_decode = true,
+            Ok(StreamEvent::Data(_)) => break event,
+            _ => {}
+        }
+    };
+    assert!(saw_decode);
+    let operation = session.recover(RecoveryOptions {
+        stable_for: Duration::ZERO,
+        ..Default::default()
+    })?;
+    let current = operation.context().clone();
+    assert!(!session.accepts(&queued.token));
+    let recovered = operation.run().await;
+    assert!(session.accepts(&recovered.token));
+    assert_eq!(recovered.result?.snapshot?.version.version, "1.19.31");
+    tokio::time::timeout(Duration::from_secs(1), async {
+        while !old.is_finished() {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await?;
+    let stopped = old.recv().await;
+    assert!(!session.accepts(&stopped.token));
+    assert!(matches!(
+        stopped.result?,
+        StreamEvent::State(StreamState::Stopped)
+    ));
+    let closed = old.recv().await;
+    assert_eq!(closed.token, context.token);
+    assert!(matches!(closed.result, Err(error) if error.kind == ErrorKind::Cancelled));
+
+    let mut fresh = current
+        .subscribe(
+            &tokio::runtime::Handle::current(),
+            StreamKind::Memory,
+            options(),
+        )
+        .result?;
+    loop {
+        let event = tokio::time::timeout(Duration::from_secs(2), fresh.recv()).await?;
+        assert!(session.accepts(&event.token));
+        if let StreamEvent::Data(data) = event.result? {
+            assert!(matches!(data.as_ref(), StreamData::Memory(memory) if memory.inuse == 42));
+            break;
+        }
+    }
+    assert_eq!(server.visits.load(Ordering::SeqCst), 2);
     Ok(())
 }
 

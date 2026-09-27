@@ -1,4 +1,5 @@
 mod common;
+use axum::response::IntoResponse;
 use common::{Server, TestResult, json as response_json};
 use nekodash_core::{ClientOptions, Endpoint, EndpointStore, ErrorKind, Session};
 use serde_json::json;
@@ -90,13 +91,36 @@ async fn switching_cancels_inflight_work_and_rejects_old_callbacks() -> TestResu
         Endpoint::new("same-id", "", &new.url, "")?,
         ClientOptions::default(),
     )?;
-    assert!(matches!(work.await?,Err(e) if e.kind==ErrorKind::Cancelled));
+    let event = work.await?;
+    assert_eq!(event.token, old_token);
+    assert!(matches!(event.result,Err(e) if e.kind==ErrorKind::Cancelled));
     assert!(!session.accepts(&old_token));
-    let (token, version) = current.run(current.client.version()).await?;
-    assert_eq!(version.version, "new");
-    assert!(session.accepts(&token));
+    let event = current.run(current.client.version()).await;
+    assert_eq!(event.result?.version, "new");
+    assert!(session.accepts(&event.token));
     session.disconnect();
-    assert!(!session.accepts(&token));
+    assert!(!session.accepts(&event.token));
     assert!(current.cancel.is_cancelled());
+    Ok(())
+}
+
+#[tokio::test]
+async fn errors_queued_before_reconnect_keep_their_original_generation() -> TestResult {
+    let server =
+        Server::start(|_| async { axum::http::StatusCode::UNAUTHORIZED.into_response() }).await?;
+    let mut session = Session::default();
+    let old = session.switch(
+        Endpoint::new("same", "", &server.url, "")?,
+        ClientOptions::default(),
+    )?;
+    let error = old.run(old.client.version()).await;
+    assert!(matches!(error.result, Err(e) if e.kind == ErrorKind::Unauthorized));
+    assert!(session.accepts(&error.token));
+    let current = session.reconnect()?;
+    assert_eq!(current.token.endpoint_id, old.token.endpoint_id);
+    assert_ne!(current.token.generation, old.token.generation);
+    assert!(old.cancel.is_cancelled());
+    assert!(!session.accepts(&error.token));
+    assert!(session.accepts(&current.token));
     Ok(())
 }
