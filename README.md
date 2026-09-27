@@ -1,38 +1,33 @@
-# Slint Rust Template
+# Nekodash
 
-A template for a Rust application that's using [Slint](https://slint.rs/) for the user interface.
+Rust + Slint 编写的跨平台核心管理面板。连接本机或局域网中的核心，
+查看运行状态、选择节点、检查连接与规则，并调整运行配置。
 
-## About
+当前开发阶段为核心通信与连接生命周期。界面按固定上游版本分阶段实现。
 
-This template helps you get started developing a Rust application with Slint as toolkit
-for the user interface. It demonstrates the integration between the `.slint` UI markup and
-Rust code, how to react to callbacks, get and set properties, and use basic widgets.
+## 项目结构
 
-## Usage
+- `crates/nekodash-core`：异步 HTTP/WebSocket 客户端、数据模型、连接会话及配置存储。
+- `src`、`ui`：Rust 应用入口与 Slint 界面。
+- [上游基线](docs/upstream-baseline.md)：参考版本、协议及功能跟踪。
+- [开发约定](docs/development.md)：代码要求、平台目标与验证方式。
+- [通信库使用](docs/core.md)：接口、错误、实时订阅及示例。
+- [验证记录](docs/verification.md)：已执行检查与平台状态。
 
-1. Install Rust by following its [getting-started guide](https://www.rust-lang.org/learn/get-started).
-   Once this is done, you should have the `rustc` compiler and the `cargo` build system installed in your `PATH`.
-2. Download and extract the [ZIP archive of this repository](https://github.com/slint-ui/slint-rust-template/archive/refs/heads/main.zip).
-3. Rename the extracted directory and change into it:
-    ```
-    mv slint-rust-template-main my-project
-    cd my-project    
-    ```
-4. Build with `cargo`:
-    ```
-    cargo build
-    ```
-5. Run the application binary:
-    ```
-    cargo run
-    ```
+## 开发
 
-We recommend using an IDE for development, along with our [LSP-based IDE integration for `.slint` files](https://github.com/slint-ui/slint/blob/master/tools/lsp/README.md). You can also load this project directly in [Visual Studio Code](https://code.visualstudio.com) and install our [Slint extension](https://marketplace.visualstudio.com/items?itemName=Slint.slint).
+本次开发使用 Rust 1.98.1、Slint 1.18.1，依赖由 `Cargo.lock` 固定。
 
-## Next Steps
+```sh
+cargo test -p nekodash-core --locked
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo run -p nekodash --locked
+```
 
-We hope that this template helps you get started, and that you enjoy exploring making user interfaces with Slint. To learn more
-about the Slint APIs and the `.slint` markup language, check out our [online documentation](https://slint.dev/docs).
+构建 Release：
 
-Don't forget to edit this readme to replace it by yours, and edit the `name =` field in `Cargo.toml` to match the name of your
-project.
+```sh
+cargo build -p nekodash --release --locked
+```
+
+发布配置使用 LTO、体积优化、符号裁剪及单个 codegen unit。

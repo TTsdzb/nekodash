@@ -1,0 +1,47 @@
+name: Core
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025, macos-15, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Toolchain
+        run: rustup toolchain install 1.98.1 --profile minimal --component rustfmt --component clippy
+      - name: Format
+        run: cargo +1.98.1 fmt --all -- --check
+      - name: Lint
+        run: cargo +1.98.1 clippy -p nekodash-core --all-targets --locked -- -D warnings
+      - name: Test
+        run: cargo +1.98.1 test -p nekodash-core --locked
+
+  android:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Toolchain
+        run: rustup toolchain install 1.98.1 --profile minimal --target aarch64-linux-android
+      - name: NDK
+        run: sdkmanager 'ndk;29.0.13113456'
+      - name: Check Android arm64
+        shell: bash
+        run: |
+          nekodash_ndk_bin="$ANDROID_HOME/ndk/29.0.13113456/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          export CC_aarch64_linux_android="$nekodash_ndk_bin/aarch64-linux-android28-clang"
+          export AR_aarch64_linux_android="$nekodash_ndk_bin/llvm-ar"
+          cargo +1.98.1 check -p nekodash-core --locked --target aarch64-linux-android
