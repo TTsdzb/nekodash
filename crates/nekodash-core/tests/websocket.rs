@@ -4,7 +4,7 @@ use axum::{
         State, WebSocketUpgrade,
         ws::{Message, WebSocket},
     },
-    http::{StatusCode, Uri},
+    http::{HeaderMap, StatusCode, Uri},
     response::{IntoResponse, Response},
     routing::get,
 };
@@ -31,6 +31,26 @@ struct WsState {
     visits: Arc<AtomicUsize>,
     tx: mpsc::UnboundedSender<Uri>,
     reject: bool,
+    probes: Arc<AtomicUsize>,
+    probe_status: StatusCode,
+    probe_delay: Duration,
+}
+
+async fn version(State(state): State<WsState>, headers: HeaderMap) -> Response {
+    state.probes.fetch_add(1, Ordering::SeqCst);
+    if headers
+        .get("authorization")
+        .and_then(|value| value.to_str().ok())
+        != Some("Bearer secret &/%")
+    {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+    tokio::time::sleep(state.probe_delay).await;
+    (
+        state.probe_status,
+        axum::Json(serde_json::json!({"version":"1.19.31","meta":true})),
+    )
+        .into_response()
 }
 
 async fn upgrade(ws: WebSocketUpgrade, State(state): State<WsState>, uri: Uri) -> Response {
@@ -49,6 +69,7 @@ async fn upgrade(ws: WebSocketUpgrade, State(state): State<WsState>, uri: Uri) -
 struct WsServer {
     url: String,
     visits: Arc<AtomicUsize>,
+    probes: Arc<AtomicUsize>,
     received: mpsc::UnboundedReceiver<Uri>,
     task: JoinHandle<()>,
 }
@@ -63,17 +84,34 @@ impl WsServer {
         F: Fn(WebSocket) -> Fut + Send + Sync + 'static,
         Fut: Future<Output = ()> + Send + 'static,
     {
+        Self::with_probe(reject, StatusCode::OK, Duration::ZERO, handler).await
+    }
+    async fn with_probe<F, Fut>(
+        reject: bool,
+        probe_status: StatusCode,
+        probe_delay: Duration,
+        handler: F,
+    ) -> TestResult<Self>
+    where
+        F: Fn(WebSocket) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = ()> + Send + 'static,
+    {
         let visits = Arc::new(AtomicUsize::new(0));
+        let probes = Arc::new(AtomicUsize::new(0));
         let (tx, received) = mpsc::unbounded_channel();
         let state = WsState {
             handler: Arc::new(move |socket| Box::pin(handler(socket))),
             visits: visits.clone(),
             tx,
             reject,
+            probes: probes.clone(),
+            probe_status,
+            probe_delay,
         };
         let listener = TcpListener::bind("127.0.0.1:0").await?;
         let url = format!("http://{}/prefix", listener.local_addr()?);
         let router = Router::new()
+            .route("/prefix/version", get(version))
             .route("/prefix/{kind}", get(upgrade))
             .with_state(state);
         let task = tokio::spawn(async move {
@@ -82,6 +120,7 @@ impl WsServer {
         Ok(Self {
             url,
             visits,
+            probes,
             received,
             task,
         })
@@ -224,9 +263,16 @@ async fn rejected_auth_is_terminal_and_secrets_are_not_in_errors() -> TestResult
 }
 
 #[tokio::test]
-async fn idle_logs_remain_alive_with_ping_pong() -> TestResult {
+async fn idle_logs_resume_without_pong() -> TestResult {
     let server = WsServer::start(false, |mut socket| async move {
-        while socket.recv().await.is_some() {}
+        // Like Mihomo, this server writes logs but never reads client control frames.
+        tokio::time::sleep(Duration::from_millis(350)).await;
+        let _ = socket
+            .send(Message::Text(
+                r#"{"type":"info","payload":"after idle"}"#.into(),
+            ))
+            .await;
+        tokio::time::sleep(Duration::from_secs(1)).await;
     })
     .await?;
     let mut sub = server.client()?.subscribe(
@@ -236,16 +282,148 @@ async fn idle_logs_remain_alive_with_ping_pong() -> TestResult {
         &CancellationToken::new(),
     )?;
     loop {
-        if matches!(
-            next(&mut sub).await?,
-            StreamEvent::State(StreamState::Connected)
-        ) {
-            break;
+        match next(&mut sub).await? {
+            StreamEvent::Error(error) => return Err(error.into()),
+            StreamEvent::Data(data) => {
+                assert!(
+                    matches!(data.as_ref(), StreamData::Log(log) if log.payload == "after idle")
+                );
+                break;
+            }
+            StreamEvent::State(StreamState::Reconnecting { .. } | StreamState::Stopped) => {
+                return Err(std::io::Error::other("idle stream was interrupted").into());
+            }
+            _ => {}
         }
     }
-    tokio::time::sleep(Duration::from_millis(240)).await;
     assert_eq!(server.visits.load(Ordering::SeqCst), 1);
+    assert!(server.probes.load(Ordering::SeqCst) > 0);
     assert!(!sub.is_finished());
+    Ok(())
+}
+
+#[tokio::test]
+async fn idle_log_probe_failure_reconnects_and_auth_failure_stops() -> TestResult {
+    for (status, kind) in [
+        (StatusCode::SERVICE_UNAVAILABLE, ErrorKind::Http),
+        (StatusCode::UNAUTHORIZED, ErrorKind::Unauthorized),
+    ] {
+        let server = WsServer::with_probe(false, status, Duration::ZERO, |socket| async move {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            drop(socket);
+        })
+        .await?;
+        let mut sub = server.client()?.subscribe(
+            &tokio::runtime::Handle::current(),
+            StreamKind::Logs(LogLevel::Info),
+            options(),
+            &CancellationToken::new(),
+        )?;
+        loop {
+            if let StreamEvent::Error(error) = next(&mut sub).await? {
+                assert_eq!(error.kind, kind);
+                assert_eq!(error.status, Some(status.as_u16()));
+                break;
+            }
+        }
+        let event = next(&mut sub).await?;
+        if status == StatusCode::UNAUTHORIZED {
+            assert!(matches!(event, StreamEvent::State(StreamState::Stopped)));
+            assert_eq!(server.visits.load(Ordering::SeqCst), 1);
+        } else {
+            assert!(matches!(
+                event,
+                StreamEvent::State(StreamState::Reconnecting { .. })
+            ));
+            while !matches!(
+                next(&mut sub).await?,
+                StreamEvent::State(StreamState::Connected)
+            ) {}
+            assert_eq!(server.visits.load(Ordering::SeqCst), 2);
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn slow_log_probe_keeps_receiving_and_can_be_cancelled() -> TestResult {
+    let server = WsServer::with_probe(
+        false,
+        StatusCode::OK,
+        Duration::from_secs(2),
+        |mut socket| async move {
+            tokio::time::sleep(Duration::from_millis(250)).await;
+            let _ = socket
+                .send(Message::Text(
+                    r#"{"type":"info","payload":"during probe"}"#.into(),
+                ))
+                .await;
+            tokio::time::sleep(Duration::from_secs(2)).await;
+        },
+    )
+    .await?;
+    let parent = CancellationToken::new();
+    let mut sub = server.client()?.subscribe(
+        &tokio::runtime::Handle::current(),
+        StreamKind::Logs(LogLevel::Info),
+        options(),
+        &parent,
+    )?;
+    tokio::time::timeout(Duration::from_secs(1), async {
+        loop {
+            match next(&mut sub).await? {
+                StreamEvent::Error(error) => return Err(error.into()),
+                StreamEvent::Data(data) => {
+                    assert!(matches!(data.as_ref(), StreamData::Log(log) if log.payload == "during probe"));
+                    return Ok::<_, Box<dyn std::error::Error + Send + Sync>>(());
+                },
+                _ => {},
+            }
+        }
+    }).await??;
+    assert_eq!(server.probes.load(Ordering::SeqCst), 1);
+    // The delivered log cancels the first probe; cancel the subscription during the next one.
+    tokio::time::timeout(Duration::from_secs(1), async {
+        while server.probes.load(Ordering::SeqCst) < 2 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await?;
+    parent.cancel();
+    assert!(matches!(
+        tokio::time::timeout(Duration::from_millis(500), sub.recv()).await??,
+        StreamEvent::State(StreamState::Stopped)
+    ));
+    assert_eq!(server.visits.load(Ordering::SeqCst), 1);
+    Ok(())
+}
+
+#[tokio::test]
+async fn stalled_periodic_streams_time_out() -> TestResult {
+    for kind in [
+        StreamKind::Traffic,
+        StreamKind::Memory,
+        StreamKind::Connections,
+    ] {
+        let server = WsServer::start(false, |socket| async move {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            drop(socket);
+        })
+        .await?;
+        let mut sub = server.client()?.subscribe(
+            &tokio::runtime::Handle::current(),
+            kind,
+            options(),
+            &CancellationToken::new(),
+        )?;
+        loop {
+            if let StreamEvent::Error(error) = next(&mut sub).await? {
+                assert_eq!(error.kind, ErrorKind::Timeout);
+                break;
+            }
+        }
+        assert_eq!(server.probes.load(Ordering::SeqCst), 0);
+    }
     Ok(())
 }
 

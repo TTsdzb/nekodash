@@ -18,7 +18,7 @@ async fn reads_snapshots_and_preserves_core_extensions() -> TestResult {
             "/providers/proxies" => json!({"providers":{"p":{"name":"p","proxies":[],"subscriptionInfo":{"Total":1000}}}}),
             "/providers/rules" => json!({"providers":{"r":{"name":"r","ruleCount":42}}}),
             "/connections" => json!({"connections":null,"uploadTotal":7,"downloadTotal":8}),
-            "/dns/query" => json!({"status":0,"Answer":[{"TTL":60,"data":"::1","name":"localhost.","type":28}],"AD":false}),
+            "/dns/query" => json!({"Status":0,"Answer":[{"TTL":60,"data":"::1","name":"localhost.","type":28}],"AD":false}),
             _ => Value::Null,
         })
     }).await?;
@@ -60,6 +60,76 @@ async fn reads_snapshots_and_preserves_core_extensions() -> TestResult {
                 .get("authorization")
                 .and_then(|v| v.to_str().ok()),
             Some("Bearer test-secret")
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn dns_status_and_optional_answers_follow_core_schema() -> TestResult {
+    let mut server = Server::start(|r| async move {
+        if r.uri.query().is_some_and(|q| q.contains("type=PTR")) {
+            response_json(json!({"Status":0,"Answer":[{
+                "TTL":60,"data":"host.test.","name":"42.0.0.127.in-addr.arpa.","type":12
+            }],"RA":true}))
+        } else {
+            response_json(json!({"Status":3,"RA":true}))
+        }
+    })
+    .await?;
+    let client = server.client()?;
+    let response = client.dns_query("42.0.0.127.in-addr.arpa", "PTR").await?;
+    assert_eq!(response.status, 0);
+    let answer = response
+        .answer
+        .as_ref()
+        .and_then(|answers| answers.first())
+        .ok_or_else(|| std::io::Error::other("missing PTR answer"))?;
+    assert_eq!(answer.kind, 12);
+    assert_eq!(answer.data, "host.test.");
+    assert_eq!(response.additional.get("RA"), Some(&json!(true)));
+    let response = client.dns_query("missing.test", "A").await?;
+    assert_eq!(response.status, 3);
+    assert!(response.answer.is_none());
+    assert_eq!(server.next().await?.uri.path(), "/dns/query");
+    Ok(())
+}
+
+#[tokio::test]
+async fn subscription_signed_values_preserve_the_entire_provider_list() -> TestResult {
+    for value in [i64::MIN, -1, 0, i64::MAX] {
+        let server = Server::start(move |_| async move {
+            response_json(json!({"providers":{
+                "signed":{"name":"signed","subscriptionInfo":{
+                    "Upload":value,"Download":value,"Total":value,"Expire":value
+                }},
+                "normal":{"name":"normal","subscriptionInfo":{"Total":1000}},
+                "local":{"name":"local"}
+            }}))
+        })
+        .await?;
+        let providers = server.client()?.proxy_providers().await?.providers;
+        assert_eq!(providers.len(), 3);
+        let info = providers
+            .get("signed")
+            .and_then(|p| p.subscription_info.as_ref())
+            .ok_or_else(|| std::io::Error::other("missing signed subscription"))?;
+        assert_eq!(
+            serde_json::to_value(info)?,
+            json!({
+                "Upload":value,"Download":value,"Total":value,"Expire":value
+            })
+        );
+        let normal = providers
+            .get("normal")
+            .and_then(|p| p.subscription_info.as_ref())
+            .ok_or_else(|| std::io::Error::other("missing normal subscription"))?;
+        assert_eq!(normal.total, 1000);
+        assert_eq!(normal.expire, 0);
+        assert!(
+            providers
+                .get("local")
+                .is_some_and(|p| p.subscription_info.is_none())
         );
     }
     Ok(())

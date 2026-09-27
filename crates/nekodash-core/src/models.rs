@@ -78,13 +78,13 @@ pub struct Proxies {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct SubscriptionInfo {
     #[serde(default, rename = "Download")]
-    pub download: u64,
+    pub download: i64,
     #[serde(default, rename = "Upload")]
-    pub upload: u64,
+    pub upload: i64,
     #[serde(default, rename = "Total")]
-    pub total: u64,
+    pub total: i64,
     #[serde(default, rename = "Expire")]
-    pub expire: u64,
+    pub expire: i64,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -252,6 +252,7 @@ pub struct DnsAnswer {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct DnsResponse {
+    #[serde(rename = "Status")]
     pub status: u32,
     #[serde(default, rename = "Answer")]
     pub answer: Option<Vec<DnsAnswer>>,

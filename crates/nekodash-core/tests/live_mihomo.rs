@@ -1,13 +1,70 @@
 //! This test owns its process, temporary home and loopback controller.
 //! Run explicitly with MIHOMO_TEST_BIN=/path/to/mihomo and --ignored.
 mod common;
+use axum::response::IntoResponse;
 use common::{Server, TestResult, empty};
 use nekodash_core::{
     CancellationToken, CoreClient, Endpoint, MaintenanceAction, Probe, StreamData, StreamEvent,
-    StreamKind, StreamOptions,
+    StreamKind, StreamOptions, StreamState, models::LogLevel,
 };
 use serde_json::json;
 use std::{process::Stdio, time::Duration};
+
+struct DnsFixture {
+    address: std::net::SocketAddr,
+    task: tokio::task::JoinHandle<()>,
+}
+
+impl DnsFixture {
+    async fn start() -> TestResult<Self> {
+        let socket = tokio::net::UdpSocket::bind("127.0.0.1:0").await?;
+        let address = socket.local_addr()?;
+        let task = tokio::spawn(async move {
+            let mut buffer = [0; 4096];
+            while let Ok((size, peer)) = socket.recv_from(&mut buffer).await {
+                if let Some(response) = buffer.get(..size).and_then(dns_answer)
+                    && socket.send_to(&response, peer).await.is_err()
+                {
+                    break;
+                }
+            }
+        });
+        Ok(Self { address, task })
+    }
+}
+
+impl Drop for DnsFixture {
+    fn drop(&mut self) {
+        self.task.abort();
+    }
+}
+
+// This fixture handles one uncompressed IN/A question and returns 127.0.0.42.
+fn dns_answer(query: &[u8]) -> Option<Vec<u8>> {
+    if query.get(4..6)? != [0, 1] {
+        return None;
+    }
+    let mut offset = 12;
+    loop {
+        let length = usize::from(*query.get(offset)?);
+        if length > 63 {
+            return None;
+        }
+        offset += 1 + length;
+        if length == 0 {
+            break;
+        }
+    }
+    let end = offset + 4;
+    if query.get(offset..end)? != [0, 1, 0, 1] {
+        return None;
+    }
+    let mut response = query.get(..2)?.to_vec();
+    response.extend_from_slice(&[0x81, 0x80, 0, 1, 0, 1, 0, 0, 0, 0]);
+    response.extend_from_slice(query.get(12..end)?);
+    response.extend_from_slice(&[0xc0, 0x0c, 0, 1, 0, 1, 0, 0, 0, 60, 0, 4, 127, 0, 0, 42]);
+    Some(response)
+}
 
 #[tokio::test]
 #[ignore = "starts an isolated core using MIHOMO_TEST_BIN"]
@@ -18,6 +75,18 @@ async fn isolated_mihomo_http_streams_and_mutations() -> TestResult {
     let reservation = std::net::TcpListener::bind("127.0.0.1:0")?;
     let port = reservation.local_addr()?.port();
     let secret = format!("nekodash-test-{}-{port}", std::process::id());
+    let dns = DnsFixture::start().await?;
+    let subscription = Server::start(|_| async {
+        (
+            [(
+                "subscription-userinfo",
+                "upload=0; download=0; total=0; expire=-1",
+            )],
+            "proxies:\n  - name: Subscription Direct\n    type: direct\n",
+        )
+            .into_response()
+    })
+    .await?;
     // Mihomo treats sub-millisecond URL tests (delay == 0) as failures.
     let target = Server::start(|_| async {
         tokio::time::sleep(Duration::from_millis(10)).await;
@@ -37,12 +106,20 @@ mode: rule
 log-level: debug
 ipv6: false
 dns:
-  enable: false
+  enable: true
+  nameserver: ['{dns}']
 tun:
   enable: false
 profile:
   store-selected: false
 proxy-providers:
+  subscription:
+    type: http
+    url: '{subscription}/provider.yaml'
+    path: subscription.yaml
+    interval: 86400
+    health-check:
+      enable: false
   fixture:
     type: file
     path: provider.yaml
@@ -63,7 +140,9 @@ rules:
   - RULE-SET,fixture-rules,Test Group
   - MATCH,Test Group
 "#,
-        target = target.url
+        target = target.url,
+        subscription = subscription.url,
+        dns = dns.address,
     );
     std::fs::write(home.path().join("config.yaml"), config)?;
     std::fs::write(
@@ -121,6 +200,26 @@ rules:
                 .providers
                 .contains_key("fixture")
         );
+        // Force the HTTP provider fetch so this also covers asynchronously initialized cores.
+        client.update_proxy_provider("subscription").await?;
+        let providers = client.proxy_providers().await?.providers;
+        assert!(providers.contains_key("fixture"));
+        assert_eq!(
+            providers
+                .get("subscription")
+                .and_then(|p| p.subscription_info.as_ref())
+                .map(|info| info.expire),
+            Some(-1)
+        );
+        let response = client.dns_query("fixture.test", "A").await?;
+        assert_eq!(response.status, 0);
+        let answer = response
+            .answer
+            .as_ref()
+            .and_then(|answers| answers.first())
+            .ok_or_else(|| std::io::Error::other("missing isolated DNS answer"))?;
+        assert_eq!(answer.data, "127.0.0.42");
+        assert_eq!(answer.kind, 1);
         assert!(
             client
                 .rule_providers()
@@ -197,6 +296,40 @@ rules:
             ));
         }
         cancel.cancel();
+        client
+            .patch_config(serde_json::from_value(json!({"log-level":"silent"}))?)
+            .await?;
+        let mut logs = client.subscribe(
+            &tokio::runtime::Handle::current(),
+            StreamKind::Logs(LogLevel::Info),
+            StreamOptions {
+                heartbeat: Duration::from_millis(50),
+                ..Default::default()
+            },
+            &CancellationToken::new(),
+        )?;
+        tokio::time::timeout(Duration::from_secs(3), async {
+            loop {
+                match logs.recv().await? {
+                    StreamEvent::State(StreamState::Connected) => {
+                        return Ok::<_, nekodash_core::Error>(());
+                    }
+                    StreamEvent::Error(error) => return Err(error),
+                    _ => {}
+                }
+            }
+        })
+        .await??;
+        assert!(
+            tokio::time::timeout(Duration::from_millis(400), logs.recv())
+                .await
+                .is_err()
+        );
+        logs.cancel();
+        assert!(matches!(
+            tokio::time::timeout(Duration::from_secs(1), logs.recv()).await??,
+            StreamEvent::State(StreamState::Stopped)
+        ));
         client.reload_config().await?;
         client.version().await?;
         Ok(())

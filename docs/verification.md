@@ -1,6 +1,7 @@
 # 验证记录
 
 日期：2026-09-27。上游基线：`v1.273.1` / `8bbc8f58fef71148a94fb5c0ff808f79b057337d`。
+通信回归、隔离核心联调、格式与 Clippy 检查于 2026-09-28 更新；平台编译记录沿用上述日期。
 
 ## 已完成的本地检查
 
@@ -9,7 +10,7 @@
 | `cargo fmt --all -- --check` | 通过 |
 | `cargo clippy --workspace --all-targets --locked -- -D warnings` | 通过，包含应用入口、构建脚本、通信库、测试及示例 |
 | `cargo check -p nekodash --locked` | Linux Slint 应用目标编译通过 |
-| `cargo test -p nekodash-core --locked` | 24 项通过，另有 1 项显式启用的核心联调测试 |
+| 通信库常规测试 | 29 项通过，另有 1 项显式启用的核心联调测试；本次以 `--include-ignored` 一并运行 |
 | 隔离 Mihomo 联调测试 | 1 项通过，核心版本 `1.19.31`，Linux x64 |
 | Android arm64 通信库 | 交叉编译检查通过，NDK `29.0.13113456`、API 28 |
 | Windows x64 通信库 | `x86_64-pc-windows-gnu` 交叉编译检查通过 |
@@ -22,26 +23,40 @@ Clippy 的生成代码例外仅作用于 Slint 生成模块，手写应用代码
 - HTTP 方法、路径、JSON 请求体、Bearer 鉴权与成功的空响应。
 - 中文及特殊字符名称、反向代理路径前缀、延迟测试查询参数和代理集内节点定位。
 - 规则数组、稀疏数字索引对象、`size: -1` 以及核心扩展字段。
+- DNS `Status`、PTR 回答、无回答的 DNS 状态码；订阅统计字段的负数、缺省值与 `i64` 边界。
 - 鉴权错误、接口不可用、服务端错误、重定向、解析失败、超时和超大响应。
 - HTTP 分块传输的体积与总超时限制。
 - 外部配置下载、重定向与鉴权隔离；下载失败时核心状态保持原样。
 - 批量延迟测试的并发上限、单项失败与取消。
 - 实例切换取消在途请求，旧会话结果标识失效。
 - WebSocket 断线恢复、畸形消息、取消、鉴权终止、心跳、队列溢出和消息大小限制。
+- 日志空闲后继续接收，HTTP 存活探测失败重连、鉴权失败终止、探测期间接收和取消，以及周期数据流超时。
 - HTTPS/WSS 的附加 CA、默认不信任测试证书、主机名校验。
 - 连接配置持久化、原子替换、选择与删除、schema 校验和 Unix 文件权限。
 
 ## 实际核心验证
 
-测试自行创建临时核心进程、独立目录、控制端口、代理集、规则集和 HTTP 测试目标。
+测试自行创建临时核心进程、独立目录、控制端口、代理集、规则集、UDP DNS 服务及 HTTP 测试目标。
 验证了版本、节点、代理集、规则集、规则、连接快照，节点选择、模式修改、
 代理集/规则集更新、健康检查、节点及组延迟、规则禁用状态、缓存清理、
 配置重载，以及速率/内存/连接 WebSocket 数据。
+DNS 查询得到本地服务返回的 `127.0.0.42`；HTTP 订阅的 `expire=-1` 与其他代理集一起正确读取。
+日志流在 `silent` 级别持续空闲八个心跳周期，随后正常取消。
 
 联调发现规则 `size` 的缺省值为 `-1`，已修正模型并加入回归用例。
 延迟测试的本地目标保留 10ms 响应时间，以符合核心将 0ms 结果视为失败的行为。
 依据：[规则响应](https://github.com/MetaCubeX/mihomo/blob/v1.19.31/hub/route/rules.go)、
 [延迟接口](https://github.com/MetaCubeX/mihomo/blob/v1.19.31/hub/route/proxies.go)。
+DNS 和订阅字段分别对照
+[DNS 响应](https://github.com/MetaCubeX/mihomo/blob/v1.19.31/hub/route/dns.go)与
+[订阅模型](https://github.com/MetaCubeX/mihomo/blob/v1.19.31/adapter/provider/subscription_info.go)验证；
+日志存活检测依据[核心日志处理器](https://github.com/MetaCubeX/mihomo/blob/v1.19.31/hub/route/server.go)实现。
+
+完整本地回归命令：
+
+```sh
+MIHOMO_TEST_BIN=/usr/bin/mihomo cargo test -p nekodash-core --locked -- --include-ignored
+```
 
 测试结束会等待自己启动的进程退出，并释放临时资源。
 

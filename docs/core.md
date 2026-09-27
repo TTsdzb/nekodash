@@ -11,6 +11,8 @@ URL 支持 HTTP、HTTPS、IPv4、IPv6 和反向代理路径前缀。控制连接
 `version`、`config`、`proxies`、`proxy_providers`、`rules`、`rule_providers`、
 `connections` 返回结构化数据。运行配置保存全部字段，节点等模型保留扩展字段。
 规则列表兼容数组与以数字索引为键的对象，`size` 保留核心的有符号数值。
+订阅流量及到期字段同样保留有符号数值。`dns_query` 读取核心的 `Status` 字段，
+返回 DNS 状态码及可选回答记录。
 
 写接口对应 [协议清单](upstream-baseline.md)。`patch_config` 接受字段映射；
 `load_config` 提交配置文本；`load_config_url` 下载配置后提交。
@@ -31,7 +33,9 @@ URL 支持 HTTP、HTTPS、IPv4、IPv6 和反向代理路径前缀。控制连接
 私有控制器证书可通过 `ClientOptions::additional_ca_pem` 添加。
 
 订阅提供连接状态、数据和结构化错误。传输断开后按上限退避重连，鉴权失败或
-接口不可用时结束该订阅。心跳用于发现无响应连接，空闲日志流通过 Ping/Pong 保活。
+接口不可用时结束该订阅。速率、内存和连接流在连续两个心跳周期未收到帧时重连。
+日志流在空闲时通过带鉴权的 `/version` 请求检查核心可达性，沿用 HTTP 的超时与
+TLS 配置；检查期间继续接收日志并响应取消。收到新帧后取消正在进行的检查。
 单条消息及队列均有大小限制，消费者落后时收到 `Lagged` 错误与丢失事件数量。
 `cancel` 停止订阅，释放对象会结束其后台任务。
 

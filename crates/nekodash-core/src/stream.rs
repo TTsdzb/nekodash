@@ -76,6 +76,8 @@ pub struct StreamOptions {
     pub handshake_timeout: Duration,
     pub initial_retry: Duration,
     pub max_retry: Duration,
+    /// Liveness check interval. Idle logs use an HTTP probe after two intervals;
+    /// periodic streams time out after two intervals without incoming frames.
     pub heartbeat: Duration,
     pub max_message_bytes: usize,
     pub queue_capacity: usize,
@@ -154,11 +156,12 @@ impl CoreClient {
         let cancel = parent.child_token();
         let task_cancel = cancel.clone();
         let connector = Connector::Rustls(self.tls_config.clone());
+        let client = self.clone();
         let task = runtime.spawn(async move {
             tokio::select! {
                 biased;
                 _ = task_cancel.cancelled() => {},
-                _ = run_stream(url, kind, options, &sender, connector) => {},
+                _ = run_stream(url, kind, options, &sender, connector, &client) => {},
             }
             let _ = sender.send(StreamEvent::State(StreamState::Stopped));
         });
@@ -176,6 +179,7 @@ async fn run_stream(
     options: StreamOptions,
     sender: &broadcast::Sender<StreamEvent>,
     connector: Connector,
+    client: &CoreClient,
 ) {
     let mut retry = options.initial_retry;
     loop {
@@ -200,19 +204,25 @@ async fn run_stream(
                 let mut heartbeat =
                     tokio::time::interval_at(last_seen + options.heartbeat, options.heartbeat);
                 heartbeat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+                let mut probe = std::pin::pin!(client.version());
+                let mut probing = false;
                 loop {
                     tokio::select! {
                         next = socket.next() => {
+                            last_seen = Instant::now();
+                            if probing {
+                                // New frames establish activity and cancel the now stale HTTP probe.
+                                probing = false;
+                                probe.set(client.version());
+                            }
                             match next {
                                 Some(Ok(Message::Text(text))) => {
-                                    last_seen = Instant::now();
                                     match kind.decode(text.as_bytes()) {
                                         Ok(data) => { retry = options.initial_retry; let _ = sender.send(StreamEvent::Data(Arc::new(data))); },
                                         Err(error) => { let _ = sender.send(StreamEvent::Error(error)); },
                                     }
                                 },
                                 Some(Ok(Message::Binary(bytes))) => {
-                                    last_seen = Instant::now();
                                     match kind.decode(&bytes) {
                                         Ok(data) => { retry = options.initial_retry; let _ = sender.send(StreamEvent::Data(Arc::new(data))); },
                                         Err(error) => { let _ = sender.send(StreamEvent::Error(error)); },
@@ -220,19 +230,36 @@ async fn run_stream(
                                 },
                                 Some(Ok(Message::Close(_))) | None => break Error::new(ErrorKind::Transport, "WebSocket", "peer closed stream"),
                                 Some(Ok(Message::Ping(_))) => {
-                                    last_seen = Instant::now();
                                     // tungstenite queues the matching pong while reading the ping.
                                     if let Err(error) = socket.flush().await { break ws_error(error); }
                                 },
-                                Some(Ok(_)) => { last_seen = Instant::now(); },
+                                Some(Ok(_)) => {},
                                 Some(Err(error)) => break ws_error(error),
+                            }
+                        },
+                        result = &mut probe, if probing => {
+                            probing = false;
+                            match result {
+                                Ok(_) => {
+                                    last_seen = Instant::now();
+                                    retry = options.initial_retry;
+                                },
+                                Err(error) => break error,
                             }
                         },
                         _ = heartbeat.tick() => {
                             if last_seen.elapsed() >= options.heartbeat.saturating_mul(2) {
-                                break Error::new(ErrorKind::Timeout, "WebSocket", "heartbeat timed out");
+                                if matches!(kind, StreamKind::Logs(_)) {
+                                    // Mihomo's log handler writes frames without reading Ping/Pong.
+                                    // Probe core reachability while still receiving logs and cancellation.
+                                    if !probing {
+                                        probe.set(client.version());
+                                        probing = true;
+                                    }
+                                } else {
+                                    break Error::new(ErrorKind::Timeout, "WebSocket", "stream data timed out");
+                                }
                             }
-                            if let Err(error) = socket.send(Message::Ping(Vec::new().into())).await { break ws_error(error); }
                         },
                     }
                 }
