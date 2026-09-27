@@ -1,0 +1,186 @@
+import { LineEdit, TextEdit, ComboBox, CheckBox, ScrollView, ListView, Spinner } from "std-widgets.slint";
+import { ViewData, Actions, Theme, I18n, GroupRow, NodeRow } from "state.slint";
+import { Icon, ActionButton, Card, SectionTitle, ChartCard, DataTable } from "widgets.slint";
+
+export component ConnectPage inherits Rectangle {
+    ScrollView {
+        content-width: self.width;
+        VerticalLayout {
+            padding-top: max(24px, (root.height - 620px) / 2);
+            padding-bottom: 32px;
+            padding-left: max(16px, (root.width - 448px) / 2);
+            padding-right: max(16px, (root.width - 448px) / 2);
+            spacing: 18px;
+            HorizontalLayout { height: 44px; alignment: center; spacing: 12px; Icon { kind: 1; width: 34px; height: 34px; colorize: Theme.accent; } Text { vertical-alignment: center; text: "NekoDash"; font-size: 28px; font-weight: 700; color: Theme.text; } }
+            Text { height: 24px; vertical-alignment: center; text: I18n.tr("setupDescription"); color: Theme.muted; horizontal-alignment: center; wrap: word-wrap; }
+            Card {
+                height: 370px;
+                VerticalLayout {
+                    padding: 26px; spacing: 14px;
+                    HorizontalLayout { spacing: 8px; Rectangle { width: 8px; height: 8px; border-radius: 4px; background: ViewData.connected ? Theme.success : Theme.muted; } Text { vertical-alignment: center; text: ViewData.status; color: Theme.muted; font-size: 12px; } }
+                    Text { vertical-alignment: center; text: I18n.tr("name"); color: Theme.text; font-size: 13px; }
+                    endpoint-label := LineEdit { text <=> ViewData.edit-label; placeholder-text: I18n.tr("name"); }
+                    Text { vertical-alignment: center; text: "URL"; color: Theme.text; font-size: 13px; }
+                    endpoint-url := LineEdit { text <=> ViewData.edit-url; placeholder-text: "http://127.0.0.1:9090"; }
+                    Text { vertical-alignment: center; text: "Secret"; color: Theme.text; font-size: 13px; }
+                    endpoint-secret := LineEdit { text <=> ViewData.edit-secret; input-type: password; accepted => { if !ViewData.connecting { Actions.connect(ViewData.edit-id, ViewData.edit-label, ViewData.edit-url, ViewData.edit-secret); } } }
+                    connect-button := ActionButton { text: ViewData.connecting ? I18n.tr("connecting") : I18n.tr("connect"); primary: true; enabled: !ViewData.connecting; clicked => { Actions.connect(ViewData.edit-id, ViewData.edit-label, ViewData.edit-url, ViewData.edit-secret); } }
+                    if ViewData.connecting : ActionButton { text: I18n.tr("cancel"); clicked => { Actions.invoke("cancel-connect", "", ""); } }
+                    if ViewData.connected : ActionButton { text: I18n.tr("back"); clicked => { ViewData.show-connect = false; } }
+                }
+            }
+            for endpoint in ViewData.endpoints : Card {
+                height: 78px;
+                HorizontalLayout { padding: 12px; spacing: 8px;
+                    VerticalLayout { Text { vertical-alignment: center; text: endpoint.label; color: Theme.text; font-size: 14px; overflow: elide; } Text { vertical-alignment: center; text: endpoint.url; color: Theme.muted; font-size: 11px; overflow: elide; } }
+                    ActionButton { icon: 7; active: endpoint.selected; clicked => { Actions.invoke("switch", endpoint.id, ""); } accessible-label: I18n.tr("connect"); }
+                    ActionButton { text: I18n.tr("edit"); clicked => { Actions.invoke("edit-endpoint", endpoint.id, ""); } }
+                    ActionButton { text: "×"; clicked => { Actions.invoke("remove-endpoint", endpoint.id, ""); } accessible-label: I18n.tr("delete"); }
+                }
+            }
+        }
+    }
+}
+
+export component OverviewPage inherits Rectangle {
+    private property <int> stat-cols: self.width > 1050px ? 6 : self.width > 620px ? 3 : 2;
+    private property <int> chart-cols: self.width > 1200px ? 3 : self.width > 760px ? 2 : 1;
+    ScrollView {
+        content-width: self.width;
+        VerticalLayout {
+            padding: 2px; spacing: 16px;
+            for row in ceil(ViewData.stats.length / root.stat-cols) : HorizontalLayout {
+                spacing: 12px;
+                for col in root.stat-cols : Card {
+                    private property <int> idx: row * root.stat-cols + col;
+                    height: 106px; horizontal-stretch: 1;
+                    VerticalLayout { padding: 16px; spacing: 10px;
+                        HorizontalLayout { Text { vertical-alignment: center; text: ViewData.stats[row * root.stat-cols + col].label; font-size: 12px; color: Theme.muted; } Icon { kind: ViewData.stats[row * root.stat-cols + col].icon; colorize: Theme.accent; width: 18px; height: 18px; } }
+                        Text { vertical-alignment: center; text: ViewData.stats[row * root.stat-cols + col].value; font-size: 24px; font-weight: 600; color: Theme.text; overflow: elide; }
+                    }
+                }
+            }
+            Card { height: 42px; HorizontalLayout { padding-left: 14px; padding-right: 14px; spacing: 10px; Icon { kind: 7; width: 16px; height: 16px; } Text { vertical-alignment: center; text: ViewData.endpoint-url; color: Theme.muted; font-size: 12px; overflow: elide; horizontal-stretch: 1; } Text { vertical-alignment: center; text: ViewData.version; color: Theme.muted; font-size: 11px; } } }
+            for row in ceil(ViewData.charts.length / root.chart-cols) : HorizontalLayout {
+                spacing: 16px;
+                for col in root.chart-cols : Rectangle { horizontal-stretch: 1; height: 260px; if row * root.chart-cols + col < ViewData.charts.length : ChartCard { width: parent.width; height: parent.height; data: ViewData.charts[row * root.chart-cols + col]; } }
+            }
+        }
+    }
+}
+
+component ProxyNode inherits Rectangle {
+    in property <NodeRow> data;
+    in property <string> group;
+    in property <bool> selectable: true;
+    height: ViewData.display-mode == 1 ? 44px : 82px;
+    background: data.selected ? Theme.selected : touch.has-hover ? Theme.raised : Theme.bg;
+    border-radius: 8px;
+    border-width: 1px;
+    border-color: data.selected ? Theme.accent : Theme.border;
+    accessible-role: button;
+    accessible-label: data.name;
+    accessible-action-default => { if root.selectable { Actions.invoke("select", root.group, root.data.name); } }
+    VerticalLayout { padding: 10px; spacing: 8px;
+        Text { vertical-alignment: center; text: root.data.name; color: root.data.selected ? Theme.accent : Theme.text; font-size: 13px; font-weight: root.data.selected ? 600 : 400; overflow: elide; }
+        if ViewData.display-mode != 1 : HorizontalLayout {
+            Text { vertical-alignment: center; text: root.data.kind + (root.data.udp ? " · UDP" : ""); color: Theme.muted; font-size: 10px; overflow: elide; horizontal-stretch: 1; }
+            Text { vertical-alignment: center; text: root.data.delay; color: root.data.latency < 0 ? Theme.muted : root.data.latency == 0 ? Theme.error : root.data.latency > 400 ? Theme.warning : Theme.success; font-size: 11px; }
+        }
+    }
+    Rectangle { x: 10px; y: parent.height - 3px; height: 2px; width: max(0px, (parent.width - 20px) * min(1, root.data.latency / 800)); background: root.data.latency > 400 ? Theme.warning : Theme.success; }
+    touch := TouchArea { enabled: root.selectable && !ViewData.busy; mouse-cursor: root.selectable ? pointer : default; clicked => { Actions.invoke("select", root.group, root.data.name); } }
+}
+
+component ProxyGroup inherits Card {
+    preferred-height: 100px + (root.data.expanded ? ceil(root.data.nodes.length / root.cols) * (ViewData.display-mode == 1 ? 52px : 90px) : 0px);
+    in property <GroupRow> data;
+    private property <int> cols: ViewData.display-mode == 1 ? 1 : max(1, floor((self.width - 28px) / 155px));
+    VerticalLayout { padding: 14px; spacing: 12px;
+        HorizontalLayout {
+            height: 36px; spacing: 10px;
+            ActionButton { text: root.data.expanded ? "⌄" : "›"; clicked => { Actions.invoke("expand", root.data.name, ""); } accessible-label: I18n.tr("collapse"); }
+            Text { vertical-alignment: center; text: root.data.name; font-size: 16px; font-weight: 600; color: Theme.text; overflow: elide; horizontal-stretch: 1; }
+            Text { vertical-alignment: center; text: root.data.count; font-size: 12px; color: Theme.muted; }
+            ActionButton { icon: 10; enabled: !ViewData.testing && !ViewData.busy; clicked => { Actions.invoke(ViewData.tab == 0 ? "test-group" : "test-provider", root.data.name, ""); } accessible-label: I18n.tr("latencyTest"); }
+            if ViewData.tab == 1 : ActionButton { text: I18n.tr("update"); enabled: !ViewData.busy; clicked => { Actions.invoke("update-provider", root.data.name, ""); } }
+        }
+        HorizontalLayout { height: 20px; spacing: 8px;
+            Text { vertical-alignment: center; text: root.data.kind + "  ›  " + root.data.current; font-size: 12px; color: Theme.accent; overflow: elide; horizontal-stretch: 1; }
+            if root.data.fixed : ActionButton { text: I18n.tr("auto"); clicked => { Actions.invoke("unfix", root.data.name, ""); } }
+        }
+        if root.data.expanded : VerticalLayout {
+            spacing: 8px;
+            for row in ceil(root.data.nodes.length / root.cols) : HorizontalLayout {
+                spacing: 8px;
+                for col in root.cols : Rectangle {
+                    horizontal-stretch: 1;
+                    height: ViewData.display-mode == 1 ? 44px : 82px;
+                    if row * root.cols + col < root.data.nodes.length : ProxyNode { width: parent.width; data: root.data.nodes[row * root.cols + col]; group: root.data.name; selectable: ViewData.tab == 0; }
+                }
+            }
+        }
+    }
+}
+
+export component ProxiesPage inherits Rectangle {
+    private property <int> cols: self.width > 980px ? 2 : 1;
+    ListView {
+        content-width: self.width;
+        for row in ceil(ViewData.groups.length / root.cols) : HorizontalLayout {
+            spacing: 16px; padding-bottom: 16px;
+            for col in root.cols : Rectangle {
+                width: (root.width - (root.cols - 1) * 16px) / root.cols;
+                preferred-height: group.preferred-height;
+                group := ProxyGroup { y: 0px; width: parent.width; height: self.preferred-height; data: ViewData.groups[row * root.cols + col]; visible: row * root.cols + col < ViewData.groups.length; }
+            }
+        }
+    }
+    if ViewData.groups.length == 0 : Text { vertical-alignment: center; text: I18n.tr("noData"); color: Theme.muted; }
+}
+
+export component ConfigPage inherits Rectangle {
+    ScrollView {
+        content-width: self.width;
+        VerticalLayout { padding: 2px; spacing: 16px;
+            if ViewData.tab < 2 : Card {
+                VerticalLayout { padding: 18px; spacing: 12px;
+                    SectionTitle { text: I18n.tr(ViewData.tab == 0 ? "coreConfig" : "xdConfig"); }
+                    for setting in ViewData.config-rows : HorizontalLayout {
+                        spacing: 12px; min-height: 42px;
+                        Text { vertical-alignment: center; text: setting.label; color: Theme.text; font-size: 13px; wrap: word-wrap; horizontal-stretch: 1; }
+                        if setting.kind == 0 : CheckBox { checked: setting.checked; toggled => { Actions.invoke("config", setting.key, self.checked ? "true" : "false"); } enabled: !ViewData.busy; }
+                        if setting.kind == 1 : HorizontalLayout { width: min(290px, root.width / 2); spacing: 6px;
+                            field := LineEdit { text: setting.value; accepted => { Actions.invoke("config", setting.key, self.text); } enabled: !ViewData.busy; }
+                            if field.text != setting.value : ActionButton { text: I18n.tr("save"); enabled: !ViewData.busy; clicked => { Actions.invoke("config", setting.key, field.text); } }
+                        }
+                        if setting.kind == 2 : ComboBox { width: min(240px, root.width / 2); model: setting.options; current-value: setting.value; selected(value) => { Actions.invoke("config", setting.key, value); } enabled: !ViewData.busy; }
+                    }
+                }
+            }
+            if ViewData.tab == 0 : Card {
+                VerticalLayout { padding: 18px; spacing: 12px;
+                    SectionTitle { text: I18n.tr("coreConfig") + " · " + I18n.tr("actions"); }
+                    for action in ["reloadConfig", "restartCore", "flushFakeIP", "flushDNSCache", "updateGEODatabases", "upgradeCore", "upgradeUI", "fetchRemoteConfig"] : ActionButton { text: I18n.tr(action); enabled: !ViewData.busy; clicked => { Actions.invoke("maintenance", action, ""); } }
+                }
+            }
+            if ViewData.tab == 1 : Card {
+                VerticalLayout { padding: 18px; spacing: 12px;
+                    SectionTitle { text: I18n.tr("settingsBackup"); }
+                    ActionButton { text: I18n.tr("exportSettings"); clicked => { Actions.invoke("export-settings", "", ""); } }
+                    ActionButton { text: I18n.tr("importSettings"); clicked => { Actions.invoke("import-settings", "", ""); } }
+                    ActionButton { text: I18n.tr("switchEndpoint"); clicked => { Actions.invoke("endpoints", "", ""); } }
+                    ActionButton { text: I18n.tr("resetSettings"); clicked => { Actions.invoke("reset-settings", "", ""); } }
+                }
+            }
+            if ViewData.tab == 2 : Card {
+                VerticalLayout { padding: 18px; spacing: 16px;
+                    SectionTitle { text: I18n.tr("dnsQuery"); }
+                    dns-input := LineEdit { text <=> ViewData.dns-name; placeholder-text: "example.com"; accepted => { Actions.invoke("dns", ViewData.dns-name, ViewData.dns-type); } }
+                    HorizontalLayout { spacing: 12px; ComboBox { model: ["A", "AAAA", "CNAME", "MX", "NS", "TXT", "PTR", "SOA", "HTTPS"]; current-value <=> ViewData.dns-type; } ActionButton { text: I18n.tr("dnsQuery"); primary: true; enabled: !ViewData.busy; clicked => { Actions.invoke("dns", ViewData.dns-name, ViewData.dns-type); } } }
+                    TextEdit { text: ViewData.dns-result; read-only: true; min-height: 320px; wrap: word-wrap; }
+                }
+            }
+        }
+    }
+}

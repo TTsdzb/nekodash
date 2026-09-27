@@ -1,17 +1,168 @@
-import { Button, VerticalBox } from "std-widgets.slint";
+import { Palette, LineEdit, TextEdit, ComboBox, ScrollView, CheckBox } from "std-widgets.slint";
+import { ViewData, Actions, Theme, I18n } from "state.slint";
+import { ActionButton, Icon, Card, SectionTitle, DataTable } from "widgets.slint";
+import { ConnectPage, OverviewPage, ProxiesPage, ConfigPage } from "pages.slint";
+export { ViewData, Actions, Theme, I18n, EndpointRow, Stat, NodeRow, GroupRow, Column, DataRow, ChartRow, ConfigRow } from "state.slint";
+
+component PageToolbar inherits VerticalLayout {
+    height: ViewData.page == 6 ? 36px : 136px;
+    spacing: 10px;
+    HorizontalLayout {
+        spacing: 8px;
+        if ViewData.page == 1 || ViewData.page == 2 || ViewData.page == 3 || ViewData.page == 6 : HorizontalLayout {
+            spacing: 6px;
+            for n in (ViewData.page == 6 ? 3 : 2) : ActionButton {
+                text: I18n.tr(ViewData.page == 1 ? (n == 0 ? "proxies" : "proxyProviders") : ViewData.page == 2 ? (n == 0 ? "rules" : "ruleProviders") : ViewData.page == 3 ? (n == 0 ? "active" : "closed") : n == 0 ? "coreConfig" : n == 1 ? "xdConfig" : "dnsQuery") + (ViewData.page == 6 ? "" : "  " + (n == 0 ? ViewData.count : ViewData.secondary-count));
+                active: ViewData.tab == n;
+                clicked => { Actions.tab(n); }
+            }
+        }
+        if ViewData.page == 4 || ViewData.page == 5 : Text { vertical-alignment: center; text: ViewData.count; color: Theme.muted; }
+        Rectangle { horizontal-stretch: 1; }
+        if ViewData.page != 6 : ActionButton { icon: 6; accessible-label: I18n.tr("settings"); clicked => { Actions.invoke("page-settings", "", ""); } }
+    }
+    if ViewData.page != 6 : search-input := LineEdit { height: 36px; text: ViewData.search; placeholder-text: I18n.tr("search"); edited(text) => { Actions.search(text); } }
+    if ViewData.page != 6 : ScrollView {
+        height: 44px; content-height: 38px;
+        HorizontalLayout { spacing: 8px;
+            if ViewData.page == 1 : ComboBox { width: 124px; model: [I18n.tr("cardMode"), I18n.tr("listMode")]; current-index: ViewData.display-mode; selected(value) => { Actions.invoke("display-mode", "", self.current-index); } }
+            if ViewData.page == 1 : ActionButton { text: I18n.tr("collapseAll"); clicked => { Actions.invoke("collapse-all", "", ""); } }
+            if ViewData.page == 1 : ActionButton { text: ViewData.testing ? I18n.tr("cancel") + " " + ViewData.progress : I18n.tr("testAll"); clicked => { Actions.invoke("test-all", "", ""); } }
+            if (ViewData.page == 1 || ViewData.page == 2) && ViewData.tab == 1 : ActionButton { text: I18n.tr("updateAll"); enabled: !ViewData.busy; clicked => { Actions.invoke("update-all", "", ""); } }
+            if ViewData.page == 3 : ActionButton { text: I18n.tr("closeAll"); enabled: !ViewData.busy && ViewData.tab == 0; clicked => { Actions.invoke("close-all", "", ""); } }
+            if ViewData.page == 3 || ViewData.page == 5 : ActionButton { text: I18n.tr(ViewData.paused ? "resume" : "pause"); active: ViewData.paused; clicked => { Actions.invoke("pause", "", ""); } }
+            if ViewData.page == 5 || (ViewData.page == 3 && ViewData.tab == 1) : ActionButton { text: I18n.tr("clearAll"); clicked => { Actions.invoke("clear", "", ""); } }
+            if ViewData.filter-options.length > 0 : ComboBox { width: 130px; model: ViewData.filter-options; current-index: ViewData.filter-index; selected(value) => { Actions.invoke("filter", "", self.current-index); } }
+            if ViewData.group-options.length > 0 : ComboBox { width: 130px; model: ViewData.group-options; current-index: ViewData.group-index; selected(value) => { Actions.invoke("grouping", "", self.current-index); } }
+            if ViewData.page >= 3 && ViewData.page <= 5 : ActionButton { text: "CSV"; clicked => { Actions.invoke("export", "csv", ""); } }
+            if ViewData.page >= 3 && ViewData.page <= 5 : ActionButton { text: "JSON"; clicked => { Actions.invoke("export", "json", ""); } }
+            Rectangle { horizontal-stretch: 1; }
+        }
+    }
+}
 
 export component AppWindow inherits Window {
-    in-out property <int> counter: 42;
-    callback request-increase-value();
-    VerticalBox {
-        Text {
-            text: "Counter: \{root.counter}";
+    title: "NekoDash";
+    preferred-width: 1280px;
+    preferred-height: 820px;
+    min-width: 340px;
+    min-height: 480px;
+    background: Theme.bg;
+    default-font-size: 14px;
+    private property <bool> mobile: self.width < 720px;
+    private property <bool> more-open: false;
+    private property <[string]> pages: ["overview", "proxies", "rules", "connections", "traffic", "logs", "config"];
+    changed width => { Actions.resize(root.width / 1px); }
+    init => { Palette.color-scheme = ColorScheme.dark; }
+    FocusScope {
+        key-pressed(event) => {
+            if event.text == Key.Escape { ViewData.dialog-visible = false; ViewData.settings-visible = false; root.more-open = false; return accept; }
+            if event.modifiers.control && event.text == "r" { Actions.invoke("refresh", "", ""); return accept; }
+            return reject;
         }
-
-        Button {
-            text: "Increase value";
-            clicked => {
-                root.request-increase-value();
+    }
+    if !ViewData.connected || ViewData.show-connect : ConnectPage { width: parent.width; height: parent.height; }
+    if ViewData.connected && !ViewData.show-connect : HorizontalLayout {
+        width: root.width; height: root.height;
+        spacing: 0;
+        if !root.mobile : Rectangle {
+            width: ViewData.sidebar-expanded ? 192px : 64px;
+            background: Theme.panel;
+            VerticalLayout { padding: 10px; spacing: 8px;
+                ActionButton { text: ViewData.sidebar-expanded ? "NekoDash" : "N"; active: true; height: 42px; clicked => { ViewData.sidebar-expanded = !ViewData.sidebar-expanded; } }
+                for page[index] in root.pages : nav-button := ActionButton {
+                    icon: index; text: ViewData.sidebar-expanded ? I18n.tr(page) : ""; height: 42px;
+                    active: ViewData.page == index; accessible-label: I18n.tr(page);
+                    clicked => { Actions.navigate(index); }
+                }
+                Rectangle { vertical-stretch: 1; }
+                Text { vertical-alignment: center; text: ViewData.stats[0].value + "\n" + ViewData.stats[1].value; font-size: 10px; color: Theme.muted; horizontal-alignment: center; }
+                ActionButton { icon: 7; text: ViewData.sidebar-expanded ? ViewData.endpoint-label : ""; accessible-label: I18n.tr("switchEndpoint"); clicked => { Actions.invoke("endpoints", "", ""); } }
+                ActionButton { text: "文/A"; accessible-label: I18n.tr("switchLanguage"); clicked => { Actions.invoke("language", "", ""); } }
+                ActionButton { text: Theme.dark ? "☾" : "☀"; accessible-label: I18n.tr("switchTheme"); clicked => { Actions.invoke("theme", "", ""); Palette.color-scheme = Theme.dark ? ColorScheme.dark : ColorScheme.light; } }
+            }
+        }
+        VerticalLayout {
+            horizontal-stretch: 1; min-width: 0px; max-width: 100000px;
+            spacing: 0;
+            if root.mobile : Rectangle {
+                height: 52px; background: Theme.panel;
+                HorizontalLayout { padding-left: 16px; padding-right: 12px; spacing: 8px;
+                    Rectangle { width: 20px; Icon { y: (parent.height - self.height) / 2; kind: 1; colorize: Theme.accent; } }
+                    Text { vertical-alignment: center; text: "NekoDash"; font-weight: 600; color: Theme.text; horizontal-stretch: 1; }
+                    ActionButton { icon: 7; clicked => { Actions.invoke("endpoints", "", ""); } }
+                    ActionButton { text: "文/A"; clicked => { Actions.invoke("language", "", ""); } }
+                }
+            }
+            VerticalLayout {
+                padding: root.mobile ? 12px : 24px; spacing: 16px;
+                HorizontalLayout {
+                    height: 36px; spacing: 12px;
+                    SectionTitle { text: I18n.tr(root.pages[ViewData.page]); horizontal-stretch: 1; }
+                    Text { vertical-alignment: center; text: ViewData.status; font-size: 11px; color: Theme.muted; overflow: elide; }
+                    mode-select := ComboBox { width: 116px; model: [I18n.tr("rule"), I18n.tr("global"), I18n.tr("direct")]; current-index: ViewData.mode-index; enabled: !ViewData.busy; selected(value) => { Actions.invoke("mode", "", self.current-index); } }
+                    ActionButton { icon: 10; enabled: !ViewData.busy; accessible-label: I18n.tr("refresh"); clicked => { Actions.invoke("refresh", "", ""); } }
+                }
+                if ViewData.page > 0 : PageToolbar { }
+                if ViewData.page == 0 : OverviewPage { }
+                if ViewData.page == 1 : ProxiesPage { }
+                if ViewData.page >= 2 && ViewData.page <= 5 : VerticalLayout { spacing: 8px; DataTable { vertical-stretch: 1; } Text { vertical-alignment: center; text: ViewData.table-status; font-size: 11px; color: Theme.muted; } }
+                if ViewData.page == 6 : ConfigPage { }
+            }
+            if root.mobile : Rectangle {
+                height: 62px; background: Theme.panel;
+                HorizontalLayout { padding: 6px; spacing: 6px;
+                    for index in [0, 1, 7, 2, 3] : mobile-nav := Rectangle {
+                        width: (root.width - 36px) / 5;
+                        accessible-role: button;
+                        accessible-label: index == 7 ? I18n.tr("more") : I18n.tr(root.pages[index]);
+                        accessible-action-default => { if index == 7 {root.more-open = !root.more-open;} else {root.more-open = false; Actions.navigate(index);} }
+                        background: ViewData.page == index ? Theme.selected : transparent; border-radius: 10px;
+                        VerticalLayout { alignment: center; spacing: 4px; HorizontalLayout { height: 20px; alignment: center; Icon { kind: index == 7 ? 11 : index; } } Text { vertical-alignment: center; text: index == 7 ? I18n.tr("more") : I18n.tr(root.pages[index]); font-size: 11px; color: ViewData.page == index ? Theme.accent : Theme.muted; horizontal-alignment: center; } }
+                        TouchArea { clicked => { if index == 7 { root.more-open = !root.more-open; } else { root.more-open = false; Actions.navigate(index); } } }
+                    }
+                }
+            }
+        }
+    }
+    if root.more-open : Card {
+        x: 12px; y: root.height - self.height - 72px; width: root.width - 24px;
+        HorizontalLayout { padding: 14px; spacing: 12px; for n in [4, 5, 6] : ActionButton { horizontal-stretch: 1; text: I18n.tr(root.pages[n]); icon: n; clicked => { root.more-open = false; Actions.navigate(n); } } }
+    }
+    if ViewData.message != "" : Rectangle {
+        x: max(16px, (root.width - 640px) / 2); y: 12px;
+        width: min(root.width - 32px, 640px); height: notice.preferred-height;
+        background: Theme.panel; border-width: 1px; border-color: ViewData.message-error ? Theme.error : Theme.success; border-radius: 10px;
+        notice := HorizontalLayout { padding: 12px; spacing: 12px;
+            Text { vertical-alignment: center; text: ViewData.message; color: Theme.text; font-size: 13px; wrap: word-wrap; horizontal-stretch: 1; }
+            ActionButton { text: "×"; clicked => { ViewData.message = ""; } }
+        }
+    }
+    if ViewData.dialog-visible || ViewData.settings-visible : Rectangle {
+        background: #0009;
+        TouchArea { }
+        Card {
+            x: max(16px, (root.width - 760px) / 2); y: max(16px, (root.height - self.height) / 2);
+            width: min(root.width - 32px, 760px); height: min(root.height - 32px, ViewData.settings-visible || ViewData.dialog-edit || ViewData.dialog-value != "" ? 620px : 240px);
+            VerticalLayout { padding: 22px; spacing: 14px;
+                SectionTitle { text: ViewData.settings-visible ? I18n.tr("settings") : ViewData.dialog-title; }
+                if !ViewData.settings-visible : Text { vertical-alignment: center; text: ViewData.dialog-body; color: Theme.muted; wrap: word-wrap; }
+                if !ViewData.settings-visible && (ViewData.dialog-edit || ViewData.dialog-value != "") : TextEdit { text <=> ViewData.dialog-value; read-only: !ViewData.dialog-edit; wrap: word-wrap; vertical-stretch: 1; }
+                if ViewData.settings-visible : ScrollView {
+                    content-width: self.width;
+                    VerticalLayout { spacing: 14px; padding: 2px;
+                        for setting in ViewData.setting-rows : VerticalLayout { spacing: 8px;
+                            Text { vertical-alignment: center; text: setting.label; color: Theme.text; wrap: word-wrap; }
+                            if setting.kind == 0 : CheckBox { checked: setting.checked; toggled => { Actions.invoke("setting", setting.key, self.checked ? "true" : "false"); } }
+                            if setting.kind == 1 : LineEdit { text: setting.value; edited(value) => { Actions.invoke("setting", setting.key, value); } }
+                            if setting.kind == 2 : ComboBox { model: setting.options; current-value: setting.value; selected(value) => { Actions.invoke("setting", setting.key, value); } }
+                        }
+                    }
+                }
+                HorizontalLayout { alignment: end; spacing: 10px;
+                    ActionButton { text: I18n.tr("cancel"); clicked => { ViewData.dialog-visible = false; ViewData.settings-visible = false; } }
+                    if ViewData.dialog-confirm || ViewData.settings-visible : ActionButton { text: I18n.tr("confirm"); primary: true; clicked => { Actions.invoke(ViewData.settings-visible ? "save-page-settings" : "confirm", "", ViewData.dialog-value); } }
+                }
             }
         }
     }

@@ -1,0 +1,136 @@
+import { Button, ListView } from "std-widgets.slint";
+import { Theme, I18n, ViewData, Actions, ChartRow, Column, DataRow } from "state.slint";
+
+export component Icon inherits Image {
+    in property <int> kind;
+    width: 20px;
+    height: 20px;
+    colorize: Theme.muted;
+    source: root.kind == 0 ? @image-url("icons/home.svg") : root.kind == 1 ? @image-url("icons/globe.svg")
+        : root.kind == 2 ? @image-url("icons/rules.svg") : root.kind == 3 ? @image-url("icons/network.svg")
+        : root.kind == 4 ? @image-url("icons/chart.svg") : root.kind == 5 ? @image-url("icons/logs.svg")
+        : root.kind == 6 ? @image-url("icons/settings.svg") : root.kind == 7 ? @image-url("icons/server.svg")
+        : root.kind == 8 ? @image-url("icons/up.svg") : root.kind == 9 ? @image-url("icons/down.svg")
+        : root.kind == 10 ? @image-url("icons/refresh.svg") : @image-url("icons/more.svg");
+}
+
+export component ActionButton inherits Rectangle {
+    in property <string> text;
+    in property <bool> active: false;
+    in property <bool> enabled: true;
+    in property <bool> primary: false;
+    in property <int> icon: -1;
+    callback clicked();
+    min-height: 36px;
+    preferred-height: 36px;
+    vertical-stretch: 0;
+    horizontal-stretch: 0;
+    min-width: content.preferred-width + 24px;
+    preferred-width: content.preferred-width + 24px;
+    border-radius: 8px;
+    border-width: 1px;
+    border-color: focus.has-focus ? Theme.accent : root.active ? Theme.accent.with-alpha(0.4) : Theme.border;
+    background: root.primary ? Theme.accent : root.active ? Theme.selected : touch.has-hover ? Theme.raised : Theme.panel;
+    opacity: root.enabled ? 1 : 0.45;
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-action-default => { if root.enabled { root.clicked(); } }
+    focus := FocusScope {
+        enabled: root.enabled;
+        key-pressed(event) => {
+            if event.text == " " || event.text == "\n" { root.clicked(); return accept; }
+            return reject;
+        }
+    }
+    content := HorizontalLayout {
+        height: 20px; y: (root.height - self.height) / 2;
+        alignment: center;
+        spacing: 7px;
+        if root.icon >= 0 : Icon { kind: root.icon; colorize: root.primary ? Theme.bg : root.active ? Theme.accent : Theme.muted; }
+        if root.text != "" : Text { vertical-alignment: center; text: root.text; font-size: 13px; color: root.primary ? Theme.bg : root.active ? Theme.accent : Theme.text; }
+    }
+    touch := TouchArea { enabled: root.enabled; mouse-cursor: pointer; clicked => { focus.focus(); root.clicked(); } }
+}
+
+export component Card inherits Rectangle {
+    background: Theme.panel;
+    border-radius: 12px;
+    border-width: 1px;
+    border-color: Theme.border;
+    @children
+}
+
+export component SectionTitle inherits Text {
+    height: 26px;
+    vertical-alignment: center;
+    font-size: 17px;
+    font-weight: 600;
+    color: Theme.text;
+}
+
+export component ChartCard inherits Card {
+    in property <ChartRow> data;
+    preferred-height: 270px;
+    VerticalLayout {
+        padding: 18px;
+        spacing: 14px;
+        SectionTitle { text: root.data.title; }
+        HorizontalLayout {
+            Text { text: root.data.maximum; color: Theme.muted; font-size: 11px; vertical-alignment: top; }
+            plot := Rectangle {
+                horizontal-stretch: 1;
+                if root.data.kind == 0 : Rectangle { for n in 5 : Rectangle { y: n * (parent.height - 1px) / 4; height: 1px; background: Theme.border.with-alpha(0.55); } }
+                Path { width: parent.width; height: parent.height; commands: root.data.primary; viewbox-width: 600; viewbox-height: 160; stroke: Theme.accent; stroke-width: root.data.kind == 0 ? 2px : 0px; fill: root.data.kind == 0 ? transparent : Theme.accent; }
+                Path { width: parent.width; height: parent.height; commands: root.data.secondary; viewbox-width: 600; viewbox-height: 160; stroke: Theme.success; stroke-width: root.data.kind == 0 ? 2px : 0px; fill: root.data.kind == 0 ? transparent : Theme.success; }
+            }
+        }
+        Text { height: 18px; vertical-alignment: center; text: root.data.footer; color: Theme.muted; font-size: 11px; horizontal-alignment: center; }
+    }
+}
+
+export component DataTable inherits Card {
+    in property <[Column]> columns: ViewData.columns;
+    in property <[DataRow]> rows: ViewData.rows;
+    in property <float> content-width: ViewData.table-width;
+    in property <string> row-action: ViewData.row-action;
+    clip: true;
+    header := Rectangle {
+        x: list.content-x; y: 0;
+        width: max(root.width, root.content-width * 1px); height: 42px;
+        background: Theme.raised;
+        HorizontalLayout {
+            padding-left: root.row-action == "" ? 0px : 72px;
+            spacing: 0;
+            for column[index] in root.columns : Rectangle {
+                width: column.size * 1px;
+                HorizontalLayout { padding-left: 12px; padding-right: 8px; Text { vertical-alignment: center; text: column.title; font-size: 12px; color: Theme.muted; font-weight: 600; overflow: elide; } }
+                TouchArea { mouse-cursor: pointer; clicked => { Actions.sort(index); } }
+            }
+            Rectangle { horizontal-stretch: 1; }
+        }
+    }
+    list := ListView {
+        x: 0; y: 42px; width: parent.width; height: parent.height - 42px;
+        content-width: max(root.width, root.content-width * 1px);
+        for row[index] in root.rows : Rectangle {
+            width: list.content-width; height: ViewData.table-row-height * 1px;
+            background: area.has-hover ? Theme.raised : index.mod(2) == 0 ? Theme.panel : Theme.bg.with-alpha(0.4);
+            HorizontalLayout {
+                padding-left: root.row-action == "" ? 0px : 72px;
+                spacing: 0;
+                for column[col] in root.columns : Rectangle {
+                    width: column.size * 1px;
+                    HorizontalLayout { padding-left: 12px; padding-right: 8px; Text { vertical-alignment: center; text: row.cells[col]; font-size: 12px; color: row.active ? Theme.text : Theme.muted; overflow: elide; } }
+                }
+                Rectangle { horizontal-stretch: 1; }
+            }
+            area := TouchArea { mouse-cursor: pointer; double-clicked => { Actions.invoke("detail", row.key, ""); } }
+            if root.row-action != "" : ActionButton {
+                x: max(8px, -list.content-x + 8px); y: (parent.height - 32px) / 2; width: 54px; height: 32px; min-height: 32px;
+                text: root.row-action;
+                clicked => { Actions.invoke("row-action", row.key, ""); }
+            }
+        }
+    }
+    if root.rows.length == 0 : Text { vertical-alignment: center; text: I18n.tr("noData"); color: Theme.muted; font-size: 14px; }
+}

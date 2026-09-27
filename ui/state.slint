@@ -1,0 +1,101 @@
+import { Palette } from "std-widgets.slint";
+
+export global Theme {
+    in-out property <bool> dark: true;
+    changed dark => { Palette.color-scheme = root.dark ? ColorScheme.dark : ColorScheme.light; }
+    out property <color> bg: dark ? #11151e : #f5f5fa;
+    out property <color> panel: dark ? #171d29 : #ffffff;
+    out property <color> raised: dark ? #222a3b : #eeeef6;
+    out property <color> border: dark ? #303a4d : #dddded;
+    out property <color> text: dark ? #e5e9f3 : #252b3b;
+    out property <color> muted: dark ? #9aa7bc : #656c80;
+    out property <color> accent: dark ? #aa9aff : #6951cd;
+    out property <color> selected: dark ? #383254 : #e5defa;
+    out property <color> success: dark ? #63d7ac : #16805e;
+    out property <color> warning: dark ? #f0bf75 : #946017;
+    out property <color> error: dark ? #ff8995 : #b82c4a;
+}
+
+export global I18n {
+    in-out property <string> language: "zh";
+    pure callback translate(string, string) -> string;
+    public pure function tr(key: string) -> string { return root.translate(key, root.language); }
+}
+
+export struct EndpointRow { id: string, label: string, url: string, selected: bool }
+export struct Stat { label: string, value: string, icon: int }
+export struct NodeRow { name: string, kind: string, delay: string, latency: int, selected: bool, udp: bool }
+export struct GroupRow { name: string, kind: string, current: string, fixed: bool, expanded: bool, count: string, nodes: [NodeRow] }
+export struct Column { title: string, size: float }
+export struct DataRow { key: string, cells: [string], active: bool }
+export struct ChartRow { kind: int, title: string, primary: string, secondary: string, maximum: string, footer: string }
+export struct ConfigRow { key: string, label: string, value: string, kind: int, checked: bool, options: [string] }
+
+export global ViewData {
+    in-out property <int> page: 0;
+    in-out property <bool> connected: false;
+    in-out property <bool> connecting: false;
+    in-out property <bool> show-connect: false;
+    in-out property <bool> sidebar-expanded: false;
+    in-out property <string> endpoint-label;
+    in-out property <string> endpoint-url;
+    in-out property <string> version;
+    in-out property <string> status: "";
+    in-out property <string> message;
+    in-out property <bool> message-error: false;
+    in-out property <[EndpointRow]> endpoints;
+    in-out property <[Stat]> stats;
+    in-out property <[ChartRow]> charts;
+    in-out property <[GroupRow]> groups;
+    in-out property <[Column]> columns;
+    in-out property <[DataRow]> rows;
+    in-out property <float> table-width: 900;
+    in-out property <float> table-row-height: 44;
+    in-out property <string> row-action;
+    in-out property <[ConfigRow]> config-rows;
+    in-out property <string> search;
+    in-out property <int> tab: 0;
+    in-out property <int> display-mode: 0;
+    in-out property <int> sort-index: 0;
+    in-out property <int> mode-index: 0;
+    in-out property <string> count;
+    in-out property <string> secondary-count;
+    in-out property <string> progress;
+    in-out property <bool> testing: false;
+    in-out property <bool> paused: false;
+    in-out property <int> log-level: 1;
+    in-out property <string> table-status;
+    in-out property <string> dialog-title;
+    in-out property <string> dialog-body;
+    in-out property <string> dialog-value;
+    in-out property <bool> dialog-edit: false;
+    in-out property <bool> dialog-confirm: false;
+    in-out property <bool> dialog-visible: false;
+    in-out property <string> dns-name;
+    in-out property <string> dns-type: "A";
+    in-out property <string> dns-result;
+    in-out property <string> edit-id;
+    in-out property <string> edit-label;
+    in-out property <string> edit-url: "http://127.0.0.1:9090";
+    in-out property <string> edit-secret;
+    in-out property <bool> busy: false;
+    in-out property <int> filter-index: 0;
+    in-out property <[string]> filter-options;
+    in-out property <int> group-index: 0;
+    in-out property <[string]> group-options;
+    in-out property <[ConfigRow]> setting-rows;
+    in-out property <bool> settings-visible: false;
+    in-out property <string> test-url: "https://www.gstatic.com/generate_204";
+    in-out property <string> test-timeout: "5000";
+    in-out property <int> proxy-sort: 0;
+}
+
+export global Actions {
+    callback invoke(string, string, string);
+    callback connect(string, string, string, string);
+    callback navigate(int);
+    callback search(string);
+    callback tab(int);
+    callback sort(int);
+    callback resize(float);
+}

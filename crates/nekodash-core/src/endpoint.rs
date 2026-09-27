@@ -52,6 +52,10 @@ impl Endpoint {
     pub fn url(&self) -> &Url {
         &self.url
     }
+    /// Used to populate the password field when editing a saved endpoint.
+    pub fn secret(&self) -> &str {
+        &self.secret
+    }
 
     pub fn validate(&self) -> Result<()> {
         if self.id.trim().is_empty() {

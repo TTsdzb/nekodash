@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2024"
 license = "MIT"
 
+[lib]
+crate-type = ["rlib", "cdylib"]
+
 [workspace]
 members = ["crates/nekodash-core"]
 resolver = "3"
@@ -24,8 +27,13 @@ workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-slint = "=1.18.1"
+slint = { version = "=1.18.1", features = ["backend-android-activity-06"] }
 nekodash-core = { path = "crates/nekodash-core" }
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+tempfile = "3"
 
 [build-dependencies]
 slint-build = "=1.18.1"
@@ -35,3 +43,19 @@ codegen-units = 1
 lto = true
 opt-level = "z"
 strip = true
+
+[package.metadata.android]
+package = "io.github.nekodash.panel"
+apk_name = "nekodash"
+build_targets = ["aarch64-linux-android"]
+
+[package.metadata.android.sdk]
+min_sdk_version = 28
+target_sdk_version = 35
+
+[package.metadata.android.application]
+label = "NekoDash"
+uses_cleartext_traffic = true
+
+[[package.metadata.android.uses_permission]]
+name = "android.permission.INTERNET"
