@@ -1,9 +1,10 @@
 # Nekodash
 
-Rust + Slint 编写的跨平台核心管理面板。连接本机或局域网中的核心，
+Rust + Slint 编写的跨平台 Mihomo 管理面板。连接本机或局域网中的官方 Mihomo，
 查看运行状态、选择节点、检查连接与规则，并调整运行配置。
 
-当前开发阶段为核心通信与连接生命周期。界面按固定上游版本分阶段实现。
+现已接通首轮 Slint 界面，包括连接管理、概览、代理、规则、连接、流量、日志与配置。
+页面按固定上游版本逐项对照，具体进度见 [UI 实现与对照](docs/ui.md)。
 
 ## 项目结构
 
@@ -19,7 +20,7 @@ Rust + Slint 编写的跨平台核心管理面板。连接本机或局域网中�
 本次开发使用 Rust 1.98.1、Slint 1.18.1，依赖由 `Cargo.lock` 固定。
 
 ```sh
-cargo test -p nekodash-core --locked
+cargo test --workspace --locked
 cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo run -p nekodash --locked
 ```

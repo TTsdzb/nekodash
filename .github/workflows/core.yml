@@ -21,12 +21,15 @@ jobs:
           persist-credentials: false
       - name: Toolchain
         run: rustup toolchain install 1.98.1 --profile minimal --component rustfmt --component clippy
+      - name: Linux UI dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev libxkbcommon-dev libudev-dev
       - name: Format
         run: cargo +1.98.1 fmt --all -- --check
       - name: Lint
-        run: cargo +1.98.1 clippy -p nekodash-core --all-targets --locked -- -D warnings
+        run: cargo +1.98.1 clippy --workspace --all-targets --locked -- -D warnings
       - name: Test
-        run: cargo +1.98.1 test -p nekodash-core --locked
+        run: cargo +1.98.1 test --workspace --locked
 
   android:
     runs-on: ubuntu-24.04
@@ -44,4 +47,5 @@ jobs:
           nekodash_ndk_bin="$ANDROID_HOME/ndk/29.0.13113456/toolchains/llvm/prebuilt/linux-x86_64/bin"
           export CC_aarch64_linux_android="$nekodash_ndk_bin/aarch64-linux-android28-clang"
           export AR_aarch64_linux_android="$nekodash_ndk_bin/llvm-ar"
-          cargo +1.98.1 check -p nekodash-core --locked --target aarch64-linux-android
+          export ANDROID_NDK="$ANDROID_HOME/ndk/29.0.13113456"
+          cargo +1.98.1 check -p nekodash --lib --locked --target aarch64-linux-android

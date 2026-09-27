@@ -2,7 +2,7 @@
 
 日期：2026-09-27。上游基线：`v1.273.1` / `8bbc8f58fef71148a94fb5c0ff808f79b057337d`。
 通信回归、隔离核心联调、格式、Clippy 及 Android/Windows 交叉编译检查于 2026-09-28 更新。
-Linux Slint 独立 `cargo check` 记录为 2026-09-27，本次工作区 Clippy 也包含应用目标。
+Slint 应用首轮界面及本地运行检查于 2026-09-28 更新。
 
 ## 已完成的本地检查
 
@@ -66,9 +66,21 @@ MIHOMO_TEST_BIN=/usr/bin/mihomo cargo test -p nekodash-core --locked -- --includ
 
 测试结束会等待自己启动的进程退出，并释放临时资源。
 
+## 首轮 UI 验证（2026-09-28）
+
+- 应用状态测试 9 项：统计增量与计数回退、关闭历史保留、策略组连接范围、图表边界、数值排序、设置校验与原子读写、测速地址选择。
+- 工作区共 52 项常规测试通过；格式、Clippy 和 Slint 静态检查通过。
+- Linux 调试应用实际运行，Slint MCP 无窗口渲染；桌面 1280×820、窄屏 390×844。
+- 两种尺寸都验证了错误 Secret 提示及重试、实时连接、七页导航、规则开关，以及通过表格关闭一条真实回环测试连接。
+- 桌面额外验证节点选择，并从核心 API 确认已选节点。测试使用独立 Mihomo `1.19.31`。
+- 截图已逐页检查；回归脚本和执行方法见 [UI 实现与对照](ui.md)。
+- 完整应用库的 Android arm64、Windows x64 GNU 交叉编译检查通过。Android 使用 NDK `29.0.13113456`、API 28。
+
+截图测试覆盖当前流程；完整上游交互对照和各平台原生运行继续按 UI 对照表推进。
+
 ## 后续平台验证
 
 `.github/workflows/core.yml` 已配置 Linux、Windows MSVC、macOS arm64、macOS Intel
-的通信库原生测试及 Android arm64 编译检查。远端 CI 结果待仓库发布后记录。
+的工作区原生测试及 Android arm64 应用库编译检查。远端 CI 结果待仓库发布后记录。
 Windows、macOS 和 Android 的设备运行验证随应用界面与打包阶段进行。
 Linux Wayland/X11 的视觉、输入及性能验证也属于界面阶段。
