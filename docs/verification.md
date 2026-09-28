@@ -6,28 +6,32 @@ Slint 应用首轮界面及本地运行检查于 2026-09-28 更新。
 
 ## 发布构建验证（2026-09-28）
 
-[`e10a8a6` 的 Release 手动运行](https://github.com/TTsdzb/nekodash/actions/runs/36383797407)
-完成了四种桌面原生构建和打包。下载产物后，检查了压缩包完整性、程序架构、
+[`ee3a459` 的 Release 手动运行](https://github.com/TTsdzb/nekodash/actions/runs/36385095865)
+五个构建任务全部通过，完成了四种桌面原生构建和 Android 签名 APK。
+下载产物后，检查了压缩包完整性、程序架构、
 Linux 可执行权限与 glibc 版本、Windows DLL 导入表，以及 macOS 包结构与版本信息。
 macOS 在各自 runner 上通过 `codesign --verify --deep --strict` 验证。
 
-| 产物 | 压缩包大小 | 结果 |
+| 产物 | 文件大小 | 结果 |
 | --- | ---: | --- |
-| Linux x64 | 9,317,795 字节 | 通过，glibc 2.35 |
-| Windows x64 MSVC | 7,759,276 字节 | 通过，CRT 静态链接，DLL 导入均为系统组件 |
+| Linux x64 | 9,317,783 字节 | 通过，glibc 2.35 |
+| Windows x64 MSVC | 7,759,274 字节 | 通过，CRT 静态链接，DLL 导入均为系统组件 |
 | macOS arm64 | 7,027,037 字节 | 通过，最低 macOS 13，ad-hoc 签名 |
 | macOS x64 | 7,429,756 字节 | 通过，最低 macOS 13，ad-hoc 签名 |
+| Android arm64 | 9,957,728 字节 | 通过，正式 keystore 签名及 16 KB 对齐 |
 
-Android 在 `a4e409b` 完成本地 Release APK 构建，使用 Rust 1.98.1、
-本机 NDK `29.0.13113456-beta1`、cargo-apk 0.10.0 和 Build Tools 35.0.1。
-测试 keystore 包含两个别名，密钥密码与 keystore 密码不同；签名证书摘要
-与指定别名匹配。`apksigner verify`、ZIP 的 16 KB 对齐、原生库 LOAD/RELRO
-的 16 KB 对齐均通过，APK 为 10,068,328 字节。
+Android 在 [`ee3a459` 的 Release 运行](https://github.com/TTsdzb/nekodash/actions/runs/36385095865/job/108808723687)
+完成正式 keystore 签名，使用 Rust 1.98.1、NDK `29.0.14206865`、
+cargo-apk 0.10.0 和 Build Tools 35.0.1。四项 Actions Secrets 均可用。
+下载最终 APK 后，`apksigner verify`、ZIP 的 16 KB 对齐、原生库 LOAD/RELRO
+的 16 KB 对齐均通过。APK 为 9,957,728 字节，SHA-256 为
+`bb1ceb9c8a3946df53cf305728317e826ec332f41a07e999ed585ac278624071`。
+
+本地签名脚本也通过了包含多个别名、密钥密码与 keystore 密码不同的测试。
 
 [`e10a8a6` 的 Core 工作流](https://github.com/TTsdzb/nekodash/actions/runs/36383774296)
 五个任务全部通过，Android 检查使用发布配置固定的正式版 NDK `29.0.14206865`。
-正式 Android 签名的 Actions 验证待仓库配置签名 Secrets 后运行；配置方法见
-[构建与发布](releases.md)。
+签名配置与发版方法见 [构建与发布](releases.md)。
 
 ## 已完成的本地检查
 
