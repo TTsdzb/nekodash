@@ -39,13 +39,15 @@ jobs:
           persist-credentials: false
       - name: Toolchain
         run: rustup toolchain install 1.98.1 --profile minimal --target aarch64-linux-android
-      - name: NDK
-        run: sdkmanager 'ndk;29.0.13113456'
+      - name: Android SDK
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+        with:
+          packages: 'platform-tools ndk;29.0.14206865'
       - name: Check Android arm64
         shell: bash
         run: |
-          nekodash_ndk_bin="$ANDROID_HOME/ndk/29.0.13113456/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          nekodash_ndk_bin="$ANDROID_HOME/ndk/29.0.14206865/toolchains/llvm/prebuilt/linux-x86_64/bin"
           export CC_aarch64_linux_android="$nekodash_ndk_bin/aarch64-linux-android28-clang"
           export AR_aarch64_linux_android="$nekodash_ndk_bin/llvm-ar"
-          export ANDROID_NDK="$ANDROID_HOME/ndk/29.0.13113456"
+          export ANDROID_NDK="$ANDROID_HOME/ndk/29.0.14206865"
           cargo +1.98.1 check -p nekodash --lib --locked --target aarch64-linux-android
