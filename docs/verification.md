@@ -127,6 +127,15 @@ MIHOMO_TEST_BIN=/usr/bin/mihomo cargo test -p nekodash-core --locked -- --includ
 - 单元测试覆盖格式化文字相同的不同字节数、整数上界、数字开头的文本、带时区与小数秒的时间。
 - 工作区 56 项常规测试通过；格式、Clippy、Slint 静态检查通过，排序截图已检查。
 
+## Android 中文字体（2026-09-29）
+
+- 在 PJE110 / Android 15 / `zh-CN` 上复现 v0.1.0 的缺字：“连接”的“连”和“开始”的“开”显示为缺字框。
+- 对照 Slint 1.18.1 使用的 fontique 0.11.1 Android 回退实现与手机的 `fonts.xml`：通用 Han 回退指向 Hant 家族，即 OPPO Sans 4.0 TC。该字体缺少“连、开、测、试”，手机的 OPPO Sans 4.0 SC 则包含这些字符。
+- Android 界面显式选择系统 Noto Sans CJK SC，日语、韩语分别选择 JP、KR 家族。手机上的 SC 字体覆盖应用翻译及源码中全部 554 个汉字。
+- 独立包名 `io.github.nekodash.fonttest` 的 APK 在同一手机安装运行，连接页标题、状态、输入框及按钮逐图验证通过；原应用和数据保留。
+- Slint 静态检查、格式、Clippy、Android release 编译和 16 KB ELF 对齐检查通过。
+- 相关上游记录：[Slint #11693](https://github.com/slint-ui/slint/issues/11693)。
+
 ## 后续平台验证
 
 `.github/workflows/core.yml` 已配置 Linux、Windows MSVC、macOS arm64、macOS Intel

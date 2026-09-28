@@ -49,6 +49,11 @@ export component AppWindow inherits Window {
     min-height: 480px;
     background: Theme.bg;
     default-font-size: 14px;
+    // Select a complete CJK family before Android's script fallback. Fontique
+    // 0.11 maps generic Han to Hant, which can miss simplified glyphs on ColorOS.
+    // https://github.com/slint-ui/slint/issues/11693
+    in property <bool> android-system-fonts: false;
+    default-font-family: root.android-system-fonts ? (I18n.language == "ja" ? "Noto Sans CJK JP" : I18n.language == "ko" ? "Noto Sans CJK KR" : "Noto Sans CJK SC") : "";
     private property <bool> mobile: self.width < 720px;
     private property <bool> more-open: false;
     private property <[string]> pages: ["overview", "proxies", "rules", "connections", "traffic", "logs", "config"];

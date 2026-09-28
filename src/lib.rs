@@ -26,6 +26,8 @@ fn run_with_directory(
         .enable_all()
         .build()?;
     let ui = AppWindow::new()?;
+    #[cfg(target_os = "android")]
+    ui.set_android_system_fonts(true);
     #[cfg(debug_assertions)]
     if let Ok(size) = std::env::var("NEKODASH_WINDOW_SIZE") {
         let (width, height) = size.split_once('x').ok_or("Expected WIDTHxHEIGHT")?;
