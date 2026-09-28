@@ -142,3 +142,14 @@ MIHOMO_TEST_BIN=/usr/bin/mihomo cargo test -p nekodash-core --locked -- --includ
 的工作区原生测试及 Android arm64 应用库编译检查。远端 CI 结果待仓库发布后记录。
 Windows、macOS 和 Android 的设备运行验证随应用界面与打包阶段进行。
 Linux Wayland/X11 的视觉、输入及性能验证也属于界面阶段。
+
+## 2026-09-29：图标与主题
+
+- 使用 `logo.png` 生成 PNG、ICO、ICNS 和 Android 五种密度资源；ICO/ICNS 解码检查通过。
+- 原配色、莫奈配色和 Material 版本均完成桌面 UI 交互回归；Material 另有 412×892 窄屏回归。
+- 对比页渲染四个页面、两种配色模式和两种尺寸，共 48 张截图；图中背景色与主题 JSON 精确一致。
+- `cargo +1.98.1 test --workspace --locked`：56 项通过，1 项保持忽略。
+- `cargo +1.98.1 clippy --workspace --all-targets --locked -- -D warnings` 通过。
+- Windows GNU 目标 `cargo check` 通过，包含新增图标资源的编译。
+- Android arm64 调试 APK 构建、对齐验证通过；`aapt dump badging` 确认五种密度图标及应用图标引用。
+- Linux 发布包的图标、桌面文件和安装脚本内容检查通过。macOS ICNS 文件可解码；应用包实际运行由 macOS 验证。

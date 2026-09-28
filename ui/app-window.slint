@@ -5,7 +5,7 @@ import { ConnectPage, OverviewPage, ProxiesPage, ConfigPage } from "pages.slint"
 export { ViewData, Actions, Theme, I18n, EndpointRow, Stat, NodeRow, GroupRow, Column, DataRow, ChartRow, ChartSeries, ConfigRow } from "state.slint";
 
 component PageToolbar inherits VerticalLayout {
-    height: ViewData.page == 6 ? 36px : 136px;
+    height: ViewData.page == 6 ? 36px : Theme.material ? 176px : 136px;
     spacing: 10px;
     HorizontalLayout {
         spacing: 8px;
@@ -21,9 +21,9 @@ component PageToolbar inherits VerticalLayout {
         Rectangle { horizontal-stretch: 1; }
         if ViewData.page != 6 : ActionButton { icon: 6; accessible-label: I18n.tr("settings"); clicked => { Actions.invoke("page-settings", "", ""); } }
     }
-    if ViewData.page != 6 : search-input := LineEdit { height: 36px; text: ViewData.search; placeholder-text: I18n.tr("search"); edited(text) => { Actions.search(text); } }
+    if ViewData.page != 6 : search-input := LineEdit { height: Theme.material ? 56px : 36px; text: ViewData.search; placeholder-text: I18n.tr("search"); edited(text) => { Actions.search(text); } }
     if ViewData.page != 6 : ScrollView {
-        height: 44px; content-height: 38px;
+        height: Theme.material ? 64px : 44px; content-height: Theme.material ? 56px : 38px;
         HorizontalLayout { spacing: 8px;
             if ViewData.page == 1 : ComboBox { width: 124px; model: [I18n.tr("cardMode"), I18n.tr("listMode")]; current-index: ViewData.display-mode; selected(value) => { Actions.invoke("display-mode", "", self.current-index); } }
             if ViewData.page == 1 : ActionButton { text: I18n.tr("collapseAll"); clicked => { Actions.invoke("collapse-all", "", ""); } }
@@ -43,6 +43,7 @@ component PageToolbar inherits VerticalLayout {
 
 export component AppWindow inherits Window {
     title: "NekoDash";
+    icon: @image-url("../assets/icons/app-256.png");
     preferred-width: 1280px;
     preferred-height: 820px;
     min-width: 340px;
@@ -74,7 +75,7 @@ export component AppWindow inherits Window {
             width: ViewData.sidebar-expanded ? 192px : 64px;
             background: Theme.panel;
             VerticalLayout { padding: 10px; spacing: 8px;
-                ActionButton { text: ViewData.sidebar-expanded ? "NekoDash" : "N"; accessible-label: I18n.tr("toggleSidebar"); active: true; height: 42px; clicked => { ViewData.sidebar-expanded = !ViewData.sidebar-expanded; } }
+                ActionButton { picture: @image-url("../assets/icons/app-64.png"); text: ViewData.sidebar-expanded ? "NekoDash" : ""; accessible-label: I18n.tr("toggleSidebar"); active: true; height: 42px; clicked => { ViewData.sidebar-expanded = !ViewData.sidebar-expanded; } }
                 for page[index] in root.pages : nav-button := ActionButton {
                     icon: index; text: ViewData.sidebar-expanded ? I18n.tr(page) : ""; height: 42px;
                     active: ViewData.page == index; accessible-label: I18n.tr(page);
@@ -93,7 +94,7 @@ export component AppWindow inherits Window {
             if root.mobile : mobile-header := Rectangle {
                 height: 52px; background: Theme.panel;
                 HorizontalLayout { padding-left: 16px; padding-right: 12px; padding-top: 8px; padding-bottom: 8px; spacing: 8px;
-                    Rectangle { width: 20px; Icon { y: (parent.height - self.height) / 2; kind: 1; colorize: Theme.accent; } }
+                    Rectangle { width: 24px; Image { y: (parent.height - self.height) / 2; width: 24px; height: 24px; source: @image-url("../assets/icons/app-64.png"); image-fit: contain; } }
                     Text { vertical-alignment: center; text: "NekoDash"; font-weight: 600; color: Theme.text; horizontal-stretch: 1; }
                     mobile-endpoints-button := ActionButton { icon: 7; accessible-label: I18n.tr("switchEndpoint"); clicked => { Actions.invoke("endpoints", "", ""); } }
                     mobile-language-button := ActionButton { icon: 12; accessible-label: I18n.tr("switchLanguage"); clicked => { Actions.invoke("language", "", ""); } }

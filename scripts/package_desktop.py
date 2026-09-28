@@ -49,12 +49,14 @@ def main():
             shutil.copy2(binary, executable_dir / "nekodash")
             shutil.copy2(ROOT / "LICENSE", resources / "LICENSE")
             shutil.copy2(ROOT / "assets/i18n/LICENSE", resources / "LICENSE-MetaCubeXD")
+            shutil.copy2(ROOT / "assets/icons/app.icns", resources / "NekoDash.icns")
             with (contents / "Info.plist").open("wb") as output:
                 plistlib.dump({
                     "CFBundleName": "NekoDash",
                     "CFBundleDisplayName": "NekoDash",
                     "CFBundleIdentifier": "io.github.nekodash.panel",
                     "CFBundleExecutable": "nekodash",
+                    "CFBundleIconFile": "NekoDash.icns",
                     "CFBundlePackageType": "APPL",
                     "CFBundleInfoDictionaryVersion": "6.0",
                     "CFBundleShortVersionString": version.split("-")[0].split("+")[0],
@@ -74,6 +76,14 @@ def main():
             shutil.copy2(binary, package / binary_name)
             shutil.copy2(ROOT / "LICENSE", package / "LICENSE")
             shutil.copy2(ROOT / "assets/i18n/LICENSE", package / "LICENSE-MetaCubeXD")
+            shutil.copy2(ROOT / "assets/icons/app-256.png", package / "nekodash.png")
+            if platform.startswith("linux"):
+                shutil.copy2(ROOT / "scripts/install_desktop.sh", package / "install.sh")
+                (package / "install.sh").chmod(0o755)
+                (package / "io.github.nekodash.panel.desktop").write_text(
+                    "[Desktop Entry]\nType=Application\nName=NekoDash\nExec=nekodash\n"
+                    "Icon=io.github.nekodash.panel\nTerminal=false\nCategories=Network;\n"
+                )
             if platform.startswith("linux"):
                 with tarfile.open(dist / f"NekoDash-{platform}.tar.gz", "w:gz", compresslevel=9) as archive:
                     archive.add(package, arcname="NekoDash")

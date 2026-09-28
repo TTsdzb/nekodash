@@ -11,7 +11,7 @@ export component ConnectPage inherits Rectangle {
             padding-left: max(16px, (root.width - 448px) / 2);
             padding-right: max(16px, (root.width - 448px) / 2);
             spacing: 18px;
-            HorizontalLayout { height: 44px; alignment: center; spacing: 12px; VerticalLayout { width: 34px; alignment: center; Icon { kind: 1; width: 34px; height: 34px; colorize: Theme.accent; } } Text { vertical-alignment: center; text: "NekoDash"; font-size: 28px; font-weight: 700; color: Theme.text; } }
+            HorizontalLayout { height: 44px; alignment: center; spacing: 12px; VerticalLayout { width: 40px; alignment: center; Image { source: @image-url("../assets/icons/app-128.png"); width: 40px; height: 40px; image-fit: contain; } } Text { vertical-alignment: center; text: "NekoDash"; font-size: 28px; font-weight: 700; color: Theme.text; } }
             Text { height: 24px; vertical-alignment: center; text: I18n.tr("setupDescription"); color: Theme.muted; horizontal-alignment: center; wrap: word-wrap; }
             endpoint-form := Card {
                 height: form.preferred-height;
@@ -160,7 +160,7 @@ export component ConfigPage inherits Rectangle {
                     for setting in ViewData.config-rows : HorizontalLayout {
                         spacing: 12px; min-height: 42px;
                         Text { vertical-alignment: center; text: setting.label; color: Theme.text; font-size: 13px; wrap: word-wrap; horizontal-stretch: 1; }
-                        if setting.kind == 0 : CheckBox { checked: setting.checked; toggled => { Actions.invoke("config", setting.key, self.checked ? "true" : "false"); } enabled: !ViewData.busy; }
+                        if setting.kind == 0 : CheckBox { horizontal-stretch: 0; checked: setting.checked; toggled => { Actions.invoke("config", setting.key, self.checked ? "true" : "false"); } enabled: !ViewData.busy; }
                         if setting.kind == 1 : HorizontalLayout { width: min(290px, root.width / 2); spacing: 6px;
                             field := LineEdit { text: setting.value; accepted => { Actions.invoke("config", setting.key, self.text); } enabled: !ViewData.busy; }
                             if field.text != setting.value : ActionButton { text: I18n.tr("save"); enabled: !ViewData.busy; clicked => { Actions.invoke("config", setting.key, field.text); } }

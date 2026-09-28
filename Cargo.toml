@@ -37,6 +37,7 @@ tempfile = "3"
 
 [build-dependencies]
 slint-build = "=1.18.1"
+winresource = "0.1.31"
 
 [profile.release]
 codegen-units = 1
@@ -47,6 +48,7 @@ strip = true
 [package.metadata.android]
 package = "io.github.nekodash.panel"
 apk_name = "nekodash"
+resources = "assets/android/res"
 build_targets = ["aarch64-linux-android"]
 
 [package.metadata.android.sdk]
@@ -55,6 +57,7 @@ target_sdk_version = 35
 
 [package.metadata.android.application]
 label = "NekoDash"
+icon = "@mipmap/ic_launcher"
 uses_cleartext_traffic = true
 
 [[package.metadata.android.uses_permission]]
