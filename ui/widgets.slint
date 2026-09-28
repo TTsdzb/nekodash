@@ -11,7 +11,7 @@ export component Icon inherits Image {
         : root.kind == 4 ? @image-url("icons/chart.svg") : root.kind == 5 ? @image-url("icons/logs.svg")
         : root.kind == 6 ? @image-url("icons/settings.svg") : root.kind == 7 ? @image-url("icons/server.svg")
         : root.kind == 8 ? @image-url("icons/up.svg") : root.kind == 9 ? @image-url("icons/down.svg")
-        : root.kind == 10 ? @image-url("icons/refresh.svg") : @image-url("icons/more.svg");
+        : root.kind == 10 ? @image-url("icons/refresh.svg") : root.kind == 11 ? @image-url("icons/more.svg") : @image-url("icons/language.svg");
 }
 
 export component ActionButton inherits Rectangle {
@@ -43,13 +43,14 @@ export component ActionButton inherits Rectangle {
         }
     }
     content := HorizontalLayout {
-        height: 20px; y: (root.height - self.height) / 2;
+        x: 0px; width: root.width; height: 20px; y: (root.height - self.height) / 2;
         alignment: center;
         spacing: 7px;
         if root.icon >= 0 : Icon { kind: root.icon; colorize: root.primary ? Theme.bg : root.active ? Theme.accent : Theme.muted; }
         if root.text != "" : Text { vertical-alignment: center; text: root.text; font-size: 13px; color: root.primary ? Theme.bg : root.active ? Theme.accent : Theme.text; }
     }
     touch := TouchArea { enabled: root.enabled; mouse-cursor: pointer; clicked => { focus.focus(); root.clicked(); } }
+    Tooltip { text: @markdown("\{root.accessible-label}"); }
 }
 
 export component Card inherits Rectangle {
@@ -80,11 +81,18 @@ export component ChartCard inherits Card {
             plot := Rectangle {
                 horizontal-stretch: 1;
                 if root.data.kind == 0 : Rectangle { for n in 5 : Rectangle { y: n * (parent.height - 1px) / 4; height: 1px; background: Theme.border.with-alpha(0.55); } }
-                Path { width: parent.width; height: parent.height; commands: root.data.primary; viewbox-width: 600; viewbox-height: 160; stroke: Theme.accent; stroke-width: root.data.kind == 0 ? 2px : 0px; fill: root.data.kind == 0 ? transparent : Theme.accent; }
-                Path { width: parent.width; height: parent.height; commands: root.data.secondary; viewbox-width: 600; viewbox-height: 160; stroke: Theme.success; stroke-width: root.data.kind == 0 ? 2px : 0px; fill: root.data.kind == 0 ? transparent : Theme.success; }
+                for series in root.data.series : Path { width: parent.width; height: parent.height; commands: series.path; viewbox-width: 600; viewbox-height: 160; stroke: Theme.chart-color(series.color-index); stroke-width: root.data.kind == 0 ? 2px : 0px; fill: root.data.kind == 0 ? transparent : Theme.chart-color(series.color-index); }
             }
         }
-        Text { height: 18px; vertical-alignment: center; text: root.data.footer; color: Theme.muted; font-size: 11px; horizontal-alignment: center; }
+        VerticalLayout {
+            vertical-stretch: 0; spacing: 4px;
+            for series in root.data.series : HorizontalLayout {
+                height: 16px; spacing: 6px;
+                VerticalLayout { width: 10px; alignment: center; Rectangle { width: 10px; height: 10px; border-radius: 2px; background: Theme.chart-color(series.color-index); } }
+                Text { vertical-alignment: center; text: series.label; color: Theme.muted; font-size: 11px; overflow: elide; horizontal-stretch: 1; Tooltip { text: @markdown("\{series.label}"); } }
+            }
+        }
+        if root.data.footer != "" : Text { height: 16px; vertical-alignment: center; text: root.data.footer; color: Theme.muted; font-size: 11px; horizontal-alignment: center; }
     }
 }
 

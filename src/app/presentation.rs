@@ -163,11 +163,24 @@ impl App {
         let max_count = self.data.counts.iter().copied().max().unwrap_or(1);
         let chart =
             |title: &str, primary: String, secondary: String, maximum: String, footer: String| {
+                let mut series = vec![ChartSeries {
+                    label: self
+                        .tr(if title == "traffic" { "upload" } else { title })
+                        .into(),
+                    path: primary.into(),
+                    color_index: 0,
+                }];
+                if title == "traffic" {
+                    series.push(ChartSeries {
+                        label: self.tr("download").into(),
+                        path: secondary.into(),
+                        color_index: 1,
+                    });
+                }
                 ChartRow {
                     kind: 0,
                     title: self.tr(title).into(),
-                    primary: primary.into(),
-                    secondary: secondary.into(),
+                    series: model(series),
                     maximum: maximum.into(),
                     footer: footer.into(),
                 }
@@ -179,12 +192,7 @@ impl App {
                 data::path(self.data.rates.iter().map(|(a, _)| *a), max_rate),
                 data::path(self.data.rates.iter().map(|(_, b)| *b), max_rate),
                 bytes(max_rate),
-                format!(
-                    "{} / {}  ·  {}",
-                    self.tr("upload"),
-                    self.tr("download"),
-                    footer
-                ),
+                footer.clone(),
             ),
             chart(
                 "memory",
@@ -201,16 +209,26 @@ impl App {
                 footer,
             ),
         ];
-        let pie = |title: &str, a: u64, b: u64, footer: String| {
+        let pie = |title: &str, a: u64, b: u64, first: String, second: String| {
             let sum = a.saturating_add(b);
             let fraction = if sum == 0 { 0.0 } else { a as f64 / sum as f64 };
             ChartRow {
                 kind: 1,
                 title: self.tr(title).into(),
-                primary: wedge(0.0, fraction).into(),
-                secondary: wedge(fraction, if sum == 0 { 0.0 } else { 1.0 }).into(),
+                series: model(vec![
+                    ChartSeries {
+                        label: first.into(),
+                        path: wedge(0.0, fraction).into(),
+                        color_index: 0,
+                    },
+                    ChartSeries {
+                        label: second.into(),
+                        path: wedge(fraction, if sum == 0 { 0.0 } else { 1.0 }).into(),
+                        color_index: 1,
+                    },
+                ]),
                 maximum: "".into(),
-                footer: footer.into(),
+                footer: "".into(),
             }
         };
         charts.insert(
@@ -219,10 +237,9 @@ impl App {
                 "total",
                 self.data.upload_total,
                 self.data.download_total,
+                format!("{} {}", self.tr("upload"), bytes(self.data.upload_total)),
                 format!(
-                    "{} {}  /  {} {}",
-                    self.tr("upload"),
-                    bytes(self.data.upload_total),
+                    "{} {}",
                     self.tr("download"),
                     bytes(self.data.download_total)
                 ),
@@ -244,7 +261,8 @@ impl App {
             "networkType",
             tcp,
             udp,
-            format!("TCP {tcp}  /  UDP {udp}"),
+            format!("TCP {tcp}"),
+            format!("UDP {udp}"),
         ));
         let mut policies: BTreeMap<String, u64> = BTreeMap::new();
         for c in self.data.connections.values() {
@@ -258,28 +276,30 @@ impl App {
         policies.sort_by_key(|(_, n)| std::cmp::Reverse(*n));
         policies.truncate(5);
         let max = policies.iter().map(|(_, n)| *n).max().unwrap_or(1).max(1) as f64;
-        let bars = policies
+        let series = policies
             .iter()
             .enumerate()
-            .map(|(i, (_, n))| {
+            .map(|(i, (name, n))| {
                 let y = i * 30;
                 let x = *n as f64 / max * 590.0;
-                format!("M 0 {y} H {x} V {} H 0 Z", y + 18)
+                ChartSeries {
+                    label: format!("{name}: {}", bytes(*n)).into(),
+                    path: format!("M 0 {y} H {x} V {} H 0 Z", y + 18).into(),
+                    color_index: i as i32,
+                }
             })
-            .collect::<Vec<_>>()
-            .join(" ");
+            .collect::<Vec<_>>();
         charts.push(ChartRow {
             kind: 2,
             title: self.tr("topProxies").into(),
-            primary: bars.into(),
-            secondary: "".into(),
+            series: model(series),
             maximum: "".into(),
-            footer: policies
-                .iter()
-                .map(|(name, n)| format!("{name}: {}", bytes(*n)))
-                .collect::<Vec<_>>()
-                .join(" · ")
-                .into(),
+            footer: if policies.is_empty() {
+                self.tr("noData")
+            } else {
+                String::new()
+            }
+            .into(),
         });
         replace(&self.charts, charts);
     }
@@ -327,7 +347,13 @@ impl App {
                     .all
                     .iter()
                     .filter(|name| matches || name.to_lowercase().contains(&query))
-                    .map(|name| make_node(name, self.data.proxies.get(name), &group.now))
+                    .map(|name| {
+                        make_node(
+                            name,
+                            self.data.proxy(name).map(|(_, proxy)| proxy),
+                            &group.now,
+                        )
+                    })
                     .collect();
                 if !query.is_empty() && !matches && nodes.is_empty() {
                     continue;

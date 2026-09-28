@@ -48,6 +48,22 @@ pub struct Data {
     pub last_connections: Option<std::time::Instant>,
 }
 impl Data {
+    /// Named policy groups may refer to nodes returned only by the provider API.
+    pub fn proxy(&self, name: &str) -> Option<(Option<&str>, &Proxy)> {
+        self.proxies
+            .get(name)
+            .map(|proxy| (None, proxy))
+            .or_else(|| {
+                self.proxy_providers.iter().find_map(|(provider, value)| {
+                    value
+                        .proxies
+                        .iter()
+                        .find(|p| p.name == name)
+                        .map(|proxy| (Some(provider.as_str()), proxy))
+                })
+            })
+    }
+
     pub fn connection_ids_through_group(&self, group: &str) -> Vec<String> {
         self.connections
             .values()
@@ -338,6 +354,33 @@ mod tests {
         data.update_connections(values, 100, false);
         assert_eq!(data.connection_ids_through_group("Proxy"), vec!["matching"]);
         assert!(data.connection_ids_through_group("Other").is_empty());
+        Ok(())
+    }
+    #[test]
+    fn resolves_provider_only_nodes_and_keeps_direct_entries_authoritative()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let mut data = Data::default();
+        let provider = serde_json::from_value(json!({
+            "name": "subscription", "type": "Proxy", "vehicleType": "HTTP",
+            "proxies": [{"name": "node", "type": "Vless", "udp": true,
+                "history": [{"time": "2026-09-28T00:00:00Z", "delay": 42}]}]
+        }))?;
+        data.proxy_providers.insert("subscription".into(), provider);
+        let (source, proxy) = data.proxy("node").ok_or("missing provider node")?;
+        assert_eq!(source, Some("subscription"));
+        assert_eq!(proxy.kind, "Vless");
+        assert!(proxy.udp);
+        assert_eq!(proxy.history.first().map(|h| h.delay), Some(42));
+        data.proxies.insert(
+            "node".into(),
+            serde_json::from_value(json!({
+                "name": "node", "type": "Direct"
+            }))?,
+        );
+        let (source, proxy) = data.proxy("node").ok_or("missing direct node")?;
+        assert_eq!(source, None);
+        assert_eq!(proxy.kind, "Direct");
+        assert!(data.proxy("missing").is_none());
         Ok(())
     }
     #[test]

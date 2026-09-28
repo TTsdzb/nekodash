@@ -2,7 +2,7 @@ import { Palette, LineEdit, TextEdit, ComboBox, ScrollView, CheckBox } from "std
 import { ViewData, Actions, Theme, I18n } from "state.slint";
 import { ActionButton, Icon, Card, SectionTitle, DataTable } from "widgets.slint";
 import { ConnectPage, OverviewPage, ProxiesPage, ConfigPage } from "pages.slint";
-export { ViewData, Actions, Theme, I18n, EndpointRow, Stat, NodeRow, GroupRow, Column, DataRow, ChartRow, ConfigRow } from "state.slint";
+export { ViewData, Actions, Theme, I18n, EndpointRow, Stat, NodeRow, GroupRow, Column, DataRow, ChartRow, ChartSeries, ConfigRow } from "state.slint";
 
 component PageToolbar inherits VerticalLayout {
     height: ViewData.page == 6 ? 36px : 136px;
@@ -69,7 +69,7 @@ export component AppWindow inherits Window {
             width: ViewData.sidebar-expanded ? 192px : 64px;
             background: Theme.panel;
             VerticalLayout { padding: 10px; spacing: 8px;
-                ActionButton { text: ViewData.sidebar-expanded ? "NekoDash" : "N"; active: true; height: 42px; clicked => { ViewData.sidebar-expanded = !ViewData.sidebar-expanded; } }
+                ActionButton { text: ViewData.sidebar-expanded ? "NekoDash" : "N"; accessible-label: I18n.tr("toggleSidebar"); active: true; height: 42px; clicked => { ViewData.sidebar-expanded = !ViewData.sidebar-expanded; } }
                 for page[index] in root.pages : nav-button := ActionButton {
                     icon: index; text: ViewData.sidebar-expanded ? I18n.tr(page) : ""; height: 42px;
                     active: ViewData.page == index; accessible-label: I18n.tr(page);
@@ -78,7 +78,7 @@ export component AppWindow inherits Window {
                 Rectangle { vertical-stretch: 1; }
                 Text { vertical-alignment: center; text: ViewData.stats[0].value + "\n" + ViewData.stats[1].value; font-size: 10px; color: Theme.muted; horizontal-alignment: center; }
                 ActionButton { icon: 7; text: ViewData.sidebar-expanded ? ViewData.endpoint-label : ""; accessible-label: I18n.tr("switchEndpoint"); clicked => { Actions.invoke("endpoints", "", ""); } }
-                ActionButton { text: "文/A"; accessible-label: I18n.tr("switchLanguage"); clicked => { Actions.invoke("language", "", ""); } }
+                language-button := ActionButton { icon: 12; accessible-label: I18n.tr("switchLanguage"); clicked => { Actions.invoke("language", "", ""); } }
                 ActionButton { text: Theme.dark ? "☾" : "☀"; accessible-label: I18n.tr("switchTheme"); clicked => { Actions.invoke("theme", "", ""); Palette.color-scheme = Theme.dark ? ColorScheme.dark : ColorScheme.light; } }
             }
         }
@@ -90,8 +90,8 @@ export component AppWindow inherits Window {
                 HorizontalLayout { padding-left: 16px; padding-right: 12px; spacing: 8px;
                     Rectangle { width: 20px; Icon { y: (parent.height - self.height) / 2; kind: 1; colorize: Theme.accent; } }
                     Text { vertical-alignment: center; text: "NekoDash"; font-weight: 600; color: Theme.text; horizontal-stretch: 1; }
-                    ActionButton { icon: 7; clicked => { Actions.invoke("endpoints", "", ""); } }
-                    ActionButton { text: "文/A"; clicked => { Actions.invoke("language", "", ""); } }
+                    ActionButton { icon: 7; accessible-label: I18n.tr("switchEndpoint"); clicked => { Actions.invoke("endpoints", "", ""); } }
+                    ActionButton { icon: 12; accessible-label: I18n.tr("switchLanguage"); clicked => { Actions.invoke("language", "", ""); } }
                 }
             }
             VerticalLayout {
@@ -129,33 +129,33 @@ export component AppWindow inherits Window {
         x: 12px; y: root.height - self.height - 72px; width: root.width - 24px;
         HorizontalLayout { padding: 14px; spacing: 12px; for n in [4, 5, 6] : ActionButton { horizontal-stretch: 1; text: I18n.tr(root.pages[n]); icon: n; clicked => { root.more-open = false; Actions.navigate(n); } } }
     }
-    if ViewData.message != "" : Rectangle {
+    if ViewData.message != "" : toast := Rectangle {
         x: max(16px, (root.width - 640px) / 2); y: 12px;
         width: min(root.width - 32px, 640px); height: notice.preferred-height;
         background: Theme.panel; border-width: 1px; border-color: ViewData.message-error ? Theme.error : Theme.success; border-radius: 10px;
         notice := HorizontalLayout { padding: 12px; spacing: 12px;
             Text { vertical-alignment: center; text: ViewData.message; color: Theme.text; font-size: 13px; wrap: word-wrap; horizontal-stretch: 1; }
-            ActionButton { text: "×"; clicked => { ViewData.message = ""; } }
+            ActionButton { text: "×"; accessible-label: I18n.tr("close"); clicked => { ViewData.message = ""; } }
         }
     }
     if ViewData.dialog-visible || ViewData.settings-visible : Rectangle {
         background: #0009;
         TouchArea { }
-        Card {
+        settings-dialog := Card {
             x: max(16px, (root.width - 760px) / 2); y: max(16px, (root.height - self.height) / 2);
-            width: min(root.width - 32px, 760px); height: min(root.height - 32px, ViewData.settings-visible || ViewData.dialog-edit || ViewData.dialog-value != "" ? 620px : 240px);
+            width: min(root.width - 32px, 760px); height: min(root.height - 32px, ViewData.settings-visible ? min(620px, 134px + ViewData.setting-rows.length * 82px) : ViewData.dialog-edit || ViewData.dialog-value != "" ? 620px : 240px);
             VerticalLayout { padding: 22px; spacing: 14px;
                 SectionTitle { text: ViewData.settings-visible ? I18n.tr("settings") : ViewData.dialog-title; }
                 if !ViewData.settings-visible : Text { vertical-alignment: center; text: ViewData.dialog-body; color: Theme.muted; wrap: word-wrap; }
                 if !ViewData.settings-visible && (ViewData.dialog-edit || ViewData.dialog-value != "") : TextEdit { text <=> ViewData.dialog-value; read-only: !ViewData.dialog-edit; wrap: word-wrap; vertical-stretch: 1; }
                 if ViewData.settings-visible : ScrollView {
                     content-width: self.width;
-                    VerticalLayout { spacing: 14px; padding: 2px;
-                        for setting in ViewData.setting-rows : VerticalLayout { spacing: 8px;
+                    VerticalLayout { spacing: 14px; padding: 2px; alignment: start;
+                        for setting in ViewData.setting-rows : VerticalLayout { spacing: 8px; vertical-stretch: 0;
                             Text { vertical-alignment: center; text: setting.label; color: Theme.text; wrap: word-wrap; }
                             if setting.kind == 0 : CheckBox { checked: setting.checked; toggled => { Actions.invoke("setting", setting.key, self.checked ? "true" : "false"); } }
-                            if setting.kind == 1 : LineEdit { text: setting.value; edited(value) => { Actions.invoke("setting", setting.key, value); } }
-                            if setting.kind == 2 : ComboBox { model: setting.options; current-value: setting.value; selected(value) => { Actions.invoke("setting", setting.key, value); } }
+                            if setting.kind == 1 : LineEdit { height: 36px; text: setting.value; edited(value) => { Actions.invoke("setting", setting.key, value); } }
+                            if setting.kind == 2 : ComboBox { height: 36px; model: setting.options; current-value: setting.value; selected(value) => { Actions.invoke("setting", setting.key, value); } }
                         }
                     }
                 }

@@ -14,6 +14,10 @@ export global Theme {
     out property <color> success: dark ? #63d7ac : #16805e;
     out property <color> warning: dark ? #f0bf75 : #946017;
     out property <color> error: dark ? #ff8995 : #b82c4a;
+    public pure function chart-color(index: int) -> color {
+        return index == 0 ? root.accent : index == 1 ? root.success : index == 2 ? root.warning
+            : index == 3 ? (root.dark ? #75bbff : #2676c9) : root.error;
+    }
 }
 
 export global I18n {
@@ -28,7 +32,8 @@ export struct NodeRow { name: string, kind: string, delay: string, latency: int,
 export struct GroupRow { name: string, kind: string, current: string, fixed: bool, expanded: bool, count: string, nodes: [NodeRow] }
 export struct Column { title: string, size: float }
 export struct DataRow { key: string, cells: [string], active: bool }
-export struct ChartRow { kind: int, title: string, primary: string, secondary: string, maximum: string, footer: string }
+export struct ChartSeries { label: string, path: string, color-index: int }
+export struct ChartRow { kind: int, title: string, series: [ChartSeries], maximum: string, footer: string }
 export struct ConfigRow { key: string, label: string, value: string, kind: int, checked: bool, options: [string] }
 
 export global ViewData {

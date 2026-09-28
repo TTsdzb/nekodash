@@ -78,6 +78,16 @@ MIHOMO_TEST_BIN=/usr/bin/mihomo cargo test -p nekodash-core --locked -- --includ
 
 截图测试覆盖当前流程；完整上游交互对照和各平台原生运行继续按 UI 对照表推进。
 
+## UI 问题回归（2026-09-28）
+
+- 桌面 1280×820、三列概览 1100×820、窄屏 390×844：检查统计卡等宽、返回按钮边界和语言窗口高度。
+- 悬浮提示通过鼠标停留触发并截图；连接页标题、概览后端图标、语言按钮和表单布局逐图检查。
+- 普通节点和仅来自 provider 的节点分别执行单节点测速，读取核心的正延迟记录，确认所选节点保持原值。
+- provider 节点的类型、UDP 和延迟显示验证；成功提示出现后自动收起验证。
+- 使用两条经过不同策略组的回环连接生成流量，检查饼图图例和多色代理用量图。
+- 新增 provider 数据解析与查找回归；工作区常规测试共 53 项，格式、Clippy 和 Slint 静态检查通过。
+- 修复后的完整应用库通过 Windows x64 GNU 与 Android arm64 交叉编译检查。
+
 ## 后续平台验证
 
 `.github/workflows/core.yml` 已配置 Linux、Windows MSVC、macOS arm64、macOS Intel

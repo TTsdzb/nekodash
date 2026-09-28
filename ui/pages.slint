@@ -11,13 +11,13 @@ export component ConnectPage inherits Rectangle {
             padding-left: max(16px, (root.width - 448px) / 2);
             padding-right: max(16px, (root.width - 448px) / 2);
             spacing: 18px;
-            HorizontalLayout { height: 44px; alignment: center; spacing: 12px; Icon { kind: 1; width: 34px; height: 34px; colorize: Theme.accent; } Text { vertical-alignment: center; text: "NekoDash"; font-size: 28px; font-weight: 700; color: Theme.text; } }
+            HorizontalLayout { height: 44px; alignment: center; spacing: 12px; VerticalLayout { width: 34px; alignment: center; Icon { kind: 1; width: 34px; height: 34px; colorize: Theme.accent; } } Text { vertical-alignment: center; text: "NekoDash"; font-size: 28px; font-weight: 700; color: Theme.text; } }
             Text { height: 24px; vertical-alignment: center; text: I18n.tr("setupDescription"); color: Theme.muted; horizontal-alignment: center; wrap: word-wrap; }
-            Card {
-                height: 370px;
-                VerticalLayout {
+            endpoint-form := Card {
+                height: form.preferred-height;
+                form := VerticalLayout {
                     padding: 26px; spacing: 14px;
-                    HorizontalLayout { spacing: 8px; Rectangle { width: 8px; height: 8px; border-radius: 4px; background: ViewData.connected ? Theme.success : Theme.muted; } Text { vertical-alignment: center; text: ViewData.status; color: Theme.muted; font-size: 12px; } }
+                    HorizontalLayout { height: 18px; spacing: 8px; VerticalLayout { width: 8px; alignment: center; Rectangle { width: 8px; height: 8px; border-radius: 4px; background: ViewData.connected ? Theme.success : Theme.muted; } } Text { vertical-alignment: center; text: ViewData.status; color: Theme.muted; font-size: 12px; } }
                     Text { vertical-alignment: center; text: I18n.tr("name"); color: Theme.text; font-size: 13px; }
                     endpoint-label := LineEdit { text <=> ViewData.edit-label; placeholder-text: I18n.tr("name"); }
                     Text { vertical-alignment: center; text: "URL"; color: Theme.text; font-size: 13px; }
@@ -26,7 +26,7 @@ export component ConnectPage inherits Rectangle {
                     endpoint-secret := LineEdit { text <=> ViewData.edit-secret; input-type: password; accepted => { if !ViewData.connecting { Actions.connect(ViewData.edit-id, ViewData.edit-label, ViewData.edit-url, ViewData.edit-secret); } } }
                     connect-button := ActionButton { text: ViewData.connecting ? I18n.tr("connecting") : I18n.tr("connect"); primary: true; enabled: !ViewData.connecting; clicked => { Actions.connect(ViewData.edit-id, ViewData.edit-label, ViewData.edit-url, ViewData.edit-secret); } }
                     if ViewData.connecting : ActionButton { text: I18n.tr("cancel"); clicked => { Actions.invoke("cancel-connect", "", ""); } }
-                    if ViewData.connected : ActionButton { text: I18n.tr("back"); clicked => { ViewData.show-connect = false; } }
+                    if ViewData.connected : back-button := ActionButton { text: I18n.tr("back"); clicked => { ViewData.show-connect = false; } }
                 }
             }
             for endpoint in ViewData.endpoints : Card {
@@ -45,22 +45,22 @@ export component ConnectPage inherits Rectangle {
 export component OverviewPage inherits Rectangle {
     private property <int> stat-cols: self.width > 1050px ? 6 : self.width > 620px ? 3 : 2;
     private property <int> chart-cols: self.width > 1200px ? 3 : self.width > 760px ? 2 : 1;
-    ScrollView {
+    overview-scroll := ScrollView {
         content-width: self.width;
         VerticalLayout {
             padding: 2px; spacing: 16px;
             for row in ceil(ViewData.stats.length / root.stat-cols) : HorizontalLayout {
                 spacing: 12px;
-                for col in root.stat-cols : Card {
+                for col in root.stat-cols : stat-card := Card {
                     private property <int> idx: row * root.stat-cols + col;
-                    height: 106px; horizontal-stretch: 1;
+                    height: 106px; width: (root.width - 4px - (root.stat-cols - 1) * 12px) / root.stat-cols;
                     VerticalLayout { padding: 16px; spacing: 10px;
-                        HorizontalLayout { Text { vertical-alignment: center; text: ViewData.stats[row * root.stat-cols + col].label; font-size: 12px; color: Theme.muted; } Icon { kind: ViewData.stats[row * root.stat-cols + col].icon; colorize: Theme.accent; width: 18px; height: 18px; } }
+                        HorizontalLayout { height: 18px; spacing: 6px; Text { vertical-alignment: center; text: ViewData.stats[row * root.stat-cols + col].label; font-size: 12px; color: Theme.muted; overflow: elide; min-width: 0px; horizontal-stretch: 1; } Icon { kind: ViewData.stats[row * root.stat-cols + col].icon; colorize: Theme.accent; width: 18px; height: 18px; } }
                         Text { vertical-alignment: center; text: ViewData.stats[row * root.stat-cols + col].value; font-size: 24px; font-weight: 600; color: Theme.text; overflow: elide; }
                     }
                 }
             }
-            Card { height: 42px; HorizontalLayout { padding-left: 14px; padding-right: 14px; spacing: 10px; Icon { kind: 7; width: 16px; height: 16px; } Text { vertical-alignment: center; text: ViewData.endpoint-url; color: Theme.muted; font-size: 12px; overflow: elide; horizontal-stretch: 1; } Text { vertical-alignment: center; text: ViewData.version; color: Theme.muted; font-size: 11px; } } }
+            Card { height: 42px; HorizontalLayout { padding-left: 14px; padding-right: 14px; spacing: 10px; VerticalLayout { width: 16px; alignment: center; Icon { kind: 7; width: 16px; height: 16px; } } Text { vertical-alignment: center; text: ViewData.endpoint-url; color: Theme.muted; font-size: 12px; overflow: elide; horizontal-stretch: 1; } Text { vertical-alignment: center; text: ViewData.version; color: Theme.muted; font-size: 11px; } } }
             for row in ceil(ViewData.charts.length / root.chart-cols) : HorizontalLayout {
                 spacing: 16px;
                 for col in root.chart-cols : Rectangle { horizontal-stretch: 1; height: 260px; if row * root.chart-cols + col < ViewData.charts.length : ChartCard { width: parent.width; height: parent.height; data: ViewData.charts[row * root.chart-cols + col]; } }
@@ -81,15 +81,26 @@ component ProxyNode inherits Rectangle {
     accessible-role: button;
     accessible-label: data.name;
     accessible-action-default => { if root.selectable { Actions.invoke("select", root.group, root.data.name); } }
+    touch := TouchArea { enabled: root.selectable && !ViewData.busy; mouse-cursor: root.selectable ? pointer : default; clicked => { Actions.invoke("select", root.group, root.data.name); } }
     VerticalLayout { padding: 10px; spacing: 8px;
-        Text { vertical-alignment: center; text: root.data.name; color: root.data.selected ? Theme.accent : Theme.text; font-size: 13px; font-weight: root.data.selected ? 600 : 400; overflow: elide; }
+        HorizontalLayout { spacing: 6px;
+            Text { vertical-alignment: center; text: root.data.name; color: root.data.selected ? Theme.accent : Theme.text; font-size: 13px; font-weight: root.data.selected ? 600 : 400; overflow: elide; horizontal-stretch: 1; min-width: 0px; }
+            if ViewData.display-mode == 1 : Text { vertical-alignment: center; text: root.data.delay; color: Theme.muted; font-size: 11px; }
+            Rectangle { width: 24px; }
+        }
         if ViewData.display-mode != 1 : HorizontalLayout {
             Text { vertical-alignment: center; text: root.data.kind + (root.data.udp ? " · UDP" : ""); color: Theme.muted; font-size: 10px; overflow: elide; horizontal-stretch: 1; }
             Text { vertical-alignment: center; text: root.data.delay; color: root.data.latency < 0 ? Theme.muted : root.data.latency == 0 ? Theme.error : root.data.latency > 400 ? Theme.warning : Theme.success; font-size: 11px; }
         }
     }
     Rectangle { x: 10px; y: parent.height - 3px; height: 2px; width: max(0px, (parent.width - 20px) * min(1, root.data.latency / 800)); background: root.data.latency > 400 ? Theme.warning : Theme.success; }
-    touch := TouchArea { enabled: root.selectable && !ViewData.busy; mouse-cursor: root.selectable ? pointer : default; clicked => { Actions.invoke("select", root.group, root.data.name); } }
+    node-test := ActionButton {
+        x: parent.width - 34px; y: ViewData.display-mode == 1 ? 10px : 8px;
+        width: 24px; height: 24px; min-width: 24px; min-height: 24px;
+        icon: 10; enabled: !ViewData.busy && !ViewData.testing;
+        accessible-label: I18n.tr("latencyTest") + " · " + root.data.name;
+        clicked => { Actions.invoke("test-node", root.group, root.data.name); }
+    }
 }
 
 component ProxyGroup inherits Card {

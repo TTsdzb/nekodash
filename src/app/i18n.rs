@@ -58,6 +58,7 @@ impl Translations {
             "details" => ("详情", "Details"),
             "refresh" => ("刷新", "Refresh"),
             "switchTheme" => ("切换主题", "Switch theme"),
+            "toggleSidebar" => ("展开或收起侧栏", "Expand or collapse sidebar"),
             "edit" => ("编辑", "Edit"),
             "delete" => ("删除", "Delete"),
             "copy" => ("复制", "Copy"),

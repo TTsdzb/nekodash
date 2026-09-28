@@ -143,6 +143,36 @@ impl App {
                 self.save();
             }
             "test-all" => self.test(),
+            "test-node" => {
+                let provider = if self.tab == 1 {
+                    Some(key.to_owned())
+                } else {
+                    self.data
+                        .proxy(value)
+                        .and_then(|(provider, _)| provider.map(str::to_owned))
+                };
+                let test_url = if self.tab == 1 {
+                    self.data
+                        .proxy_providers
+                        .get(key)
+                        .and_then(|p| p.test_url.as_deref())
+                } else {
+                    self.data
+                        .proxies
+                        .get(key)
+                        .and_then(|p| p.test_url.as_deref())
+                };
+                let probe = Probe {
+                    node: value.to_owned(),
+                    provider,
+                    url: self.settings.resolve_test_url(test_url),
+                    timeout_ms: self.settings.test_timeout_ms,
+                };
+                self.mutate(action, move |c| async move {
+                    c.test_proxy(&probe).await?;
+                    Ok(())
+                });
+            }
             "test-group" => {
                 let name = key.to_owned();
                 let url = self.settings.resolve_test_url(
@@ -836,7 +866,10 @@ impl App {
                     if tested.insert((name.clone(), url.clone())) {
                         probes.push(Probe {
                             node: name.clone(),
-                            provider: None,
+                            provider: self
+                                .data
+                                .proxy(name)
+                                .and_then(|(provider, _)| provider.map(str::to_owned)),
                             url: url.clone(),
                             timeout_ms: self.settings.test_timeout_ms,
                         });

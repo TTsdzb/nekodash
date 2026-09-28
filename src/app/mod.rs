@@ -315,6 +315,16 @@ impl Application {
                         Err(_) => break,
                     }
                 }
+                if app
+                    .notice_until
+                    .get()
+                    .is_some_and(|until| Instant::now() >= until)
+                {
+                    app.notice_until.set(None);
+                    if let Some(ui) = app.ui.upgrade() {
+                        ui.global::<ViewData>().set_message("".into());
+                    }
+                }
                 if app.session.current().is_some()
                     && !app.recovering
                     && !app.busy
