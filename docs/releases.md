@@ -48,7 +48,8 @@ gh secret set ANDROID_KEY_PASSWORD --repo TTsdzb/nekodash
 ```
 
 签名文件在步骤结束时清理。APK 使用 SDK 的 `apksigner` 签名和验证，
-并通过 `zipalign -c -P 16 4` 检查对齐。
+并通过 `zipalign -c -P 16 4` 检查对齐。打包时也会检查所有原生库的
+LOAD 段及 RELRO 末尾满足 16 KB 页面对齐。
 
 ## 发版
 
