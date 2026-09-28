@@ -200,6 +200,13 @@ try:
         rpc("click_element",elementHandle=find("ConnectPage::connect-button")[0])
         wait_for(lambda: not find("ConnectPage::connect-button"))
         screenshot("overview")
+        if int(args.size.split("x")[0])<720:
+            header=properties(find("AppWindow::mobile-header")[0])
+            for identifier in ["mobile-endpoints-button", "mobile-language-button"]:
+                item=properties(find("AppWindow::"+identifier)[0])
+                assert abs(item["size"]["height"]-36)<1
+                assert abs(item["absolutePosition"].get("y",0)-header["absolutePosition"].get("y",0)-8)<1
+                assert abs(header["size"]["height"]-item["size"]["height"]-16)<1
         # Read geometry as well as pixels: changing values must not change column widths.
         stat_geometry=[properties(handle) for handle in find("OverviewPage::stat-card")]
         assert len(stat_geometry)==6

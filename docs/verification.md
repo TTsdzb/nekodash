@@ -87,6 +87,7 @@ MIHOMO_TEST_BIN=/usr/bin/mihomo cargo test -p nekodash-core --locked -- --includ
 - 使用两条经过不同策略组的回环连接生成流量，检查饼图图例和多色代理用量图。
 - 新增 provider 数据解析与查找回归；工作区常规测试共 53 项，格式、Clippy 和 Slint 静态检查通过。
 - 修复后的完整应用库通过 Windows x64 GNU 与 Android arm64 交叉编译检查。
+- 窄布局顶栏按钮高 36px，上下各留 8px；390×844 回归通过，并对两个按钮的实际坐标和尺寸做断言。
 
 ## 后续平台验证
 
