@@ -13,18 +13,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .set("FileDescription", "NekoDash")
             .compile()?;
     }
-    let selected = std::env::var("SLINT_STYLE").unwrap_or_else(|_| "fluent".into());
-    let style = match selected.as_str() {
-        "fluent" => "nekodash-fluent",
-        "material" => "nekodash-material",
-        other => other,
-    };
-    let config = slint_build::CompilerConfiguration::new()
-        .with_style(style.into())
-        .with_include_paths(vec![
-            "ui/styles".into(),
-            format!("ui/styles/{style}").into(),
-        ]);
-    slint_build::compile_with_config("ui/app-window.slint", config)?;
+    slint_build::compile("ui/app-window.slint")?;
     Ok(())
 }

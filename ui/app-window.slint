@@ -5,7 +5,7 @@ import { ConnectPage, OverviewPage, ProxiesPage, ConfigPage } from "pages.slint"
 export { ViewData, Actions, Theme, I18n, EndpointRow, Stat, NodeRow, GroupRow, Column, DataRow, ChartRow, ChartSeries, ConfigRow } from "state.slint";
 
 component PageToolbar inherits VerticalLayout {
-    height: ViewData.page == 6 ? 36px : Theme.material ? 176px : 136px;
+    height: ViewData.page == 6 ? 36px : 136px;
     spacing: 10px;
     HorizontalLayout {
         spacing: 8px;
@@ -21,9 +21,9 @@ component PageToolbar inherits VerticalLayout {
         Rectangle { horizontal-stretch: 1; }
         if ViewData.page != 6 : ActionButton { icon: 6; accessible-label: I18n.tr("settings"); clicked => { Actions.invoke("page-settings", "", ""); } }
     }
-    if ViewData.page != 6 : search-input := LineEdit { height: Theme.material ? 56px : 36px; text: ViewData.search; placeholder-text: I18n.tr("search"); edited(text) => { Actions.search(text); } }
+    if ViewData.page != 6 : search-input := LineEdit { height: 36px; text: ViewData.search; placeholder-text: I18n.tr("search"); edited(text) => { Actions.search(text); } }
     if ViewData.page != 6 : ScrollView {
-        height: Theme.material ? 64px : 44px; content-height: Theme.material ? 56px : 38px;
+        height: 44px; content-height: 38px;
         HorizontalLayout { spacing: 8px;
             if ViewData.page == 1 : ComboBox { width: 124px; model: [I18n.tr("cardMode"), I18n.tr("listMode")]; current-index: ViewData.display-mode; selected(value) => { Actions.invoke("display-mode", "", self.current-index); } }
             if ViewData.page == 1 : ActionButton { text: I18n.tr("collapseAll"); clicked => { Actions.invoke("collapse-all", "", ""); } }

@@ -165,7 +165,7 @@ export component ConfigPage inherits Rectangle {
                             field := LineEdit { text: setting.value; accepted => { Actions.invoke("config", setting.key, self.text); } enabled: !ViewData.busy; }
                             if field.text != setting.value : ActionButton { text: I18n.tr("save"); enabled: !ViewData.busy; clicked => { Actions.invoke("config", setting.key, field.text); } }
                         }
-                        if setting.kind == 2 : ComboBox { width: min(240px, root.width / 2); model: setting.options; current-value: setting.value; selected(value) => { Actions.invoke("config", setting.key, value); } enabled: !ViewData.busy; }
+                        if setting.kind == 2 : ComboBox { width: min(240px, root.width / 2); model: setting.options; current-index: setting.choice-index; selected(value) => { Actions.invoke("config", setting.key, value); } enabled: !ViewData.busy; }
                     }
                 }
             }

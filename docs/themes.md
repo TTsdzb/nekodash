@@ -1,26 +1,26 @@
 # 图标与主题
 
-`logo.png` 是图标源文件。`python3 scripts/generate_icons.py` 使用 ImageMagick
+`logo.png` 是透明图标源文件。`python3 scripts/generate_icons.py` 使用 ImageMagick
 生成窗口图标、Windows ICO、macOS ICNS 和 Android 各密度启动器资源。
 Linux 发布包中的 `install.sh` 安装用户级应用、菜单项与图标；需要将
 `~/.local/bin` 加入 `PATH`。
 
-主题源文件为 `assets/theme/material-tonalSpot.json`，保留原始导出的完整调色板。
-运行 `python3 scripts/generate_theme.py` 更新 `ui/monet.slint`。界面使用明暗两套
-主色、容器、表面、文字与错误颜色；成功、警告继续使用独立的语义色。
+## 配色
 
-默认使用当前布局与莫奈配色。Material 对比版本使用 Slint Material 标准控件，
-配合圆角卡片与紧凑图标按钮：
+配色定义在 `ui/state.slint` 的 `Theme` 中。明暗两套颜色参考图片中的冷蓝色、
+蓝灰阴影和灰粉色，保留卡片、边框及选中状态的层次。
 
-```sh
-SLINT_STYLE=material cargo run --locked
-```
+| 用途 | 深色 | 浅色 |
+| --- | --- | --- |
+| 背景 | `#101521` | `#F1F5FC` |
+| 卡片 | `#192131` | `#FCFDFF` |
+| 主色 | `#A8BFFA` | `#4665A2` |
+| 选中背景 | `#30466E` | `#DDE7FA` |
+| 正文 | `#EDF2FC` | `#24324C` |
+| 辅助文字 | `#B0BDD4` | `#526582` |
 
-调试构建中可通过 `NEKODASH_PALETTE=original cargo run --locked` 查看原配色。
-`SLINT_STYLE=fluent cargo run --locked` 切回默认控件样式。
-
-Slint 1.18.1 的标准控件调色板为只读。`ui/styles` 保存固定版本的控件源文件，
-将调色板角色映射到导入的主题；来源和再生成方式见该目录 README。
+正文、辅助文字、选中项和主要按钮文字与对应背景的对比度均不低于 4.5:1。
+标准控件使用 Slint Fluent 样式，通过 `Palette.color-scheme` 跟随明暗模式。
 
 ## 生成对比页
 
@@ -30,6 +30,7 @@ Slint 1.18.1 的标准控件调色板为只读。`ui/styles` 保存固定版本�
 python3 scripts/preview_themes.py --viewer /path/to/slint-viewer
 ```
 
-打开 `target/theme-preview/gallery/index.html`，可切换概览、代理、配置、连接页面，
-以及明暗模式和桌面、窄屏尺寸。截图直接渲染项目的 Slint 组件，数据来自固定示例。
+打开 `target/theme-preview/hand-tuned/index.html`，比较原配色和手调配色。
+可切换概览、代理、配置、连接页面，以及明暗模式和桌面、窄屏尺寸。
+截图渲染项目的 Slint 组件，数据来自固定示例。
 实际交互通过 `scripts/ui_smoke.py` 对独立 Mihomo 测试进程验证。

@@ -16,7 +16,7 @@ Rust + Slint 编写的跨平台 Mihomo 管理面板。连接本机或局域网�
 - [开发约定](docs/development.md)：代码要求、平台目标与验证方式。
 - [通信库使用](docs/core.md)：接口、错误、实时订阅及示例。
 - [验证记录](docs/verification.md)：已执行检查与平台状态。
-- [图标与主题](docs/themes.md)：主题来源、Material 构建方式与三组截图对比。
+- [图标与主题](docs/themes.md)：透明图标、明暗配色与截图对比。
 - [构建与发布](docs/releases.md)：tag 自动构建、Android 签名配置及各平台安装方式。
 
 ## 开发

@@ -10,7 +10,3 @@ rustflags = [
 rustflags = [
     "-C", "link-arg=/STACK:8000000"
 ]
-[env]
-# The pinned Slint widget sources use interfaces and internal menu components.
-# Enable the same compiler facilities when loading our palette-adapted copies.
-SLINT_ENABLE_EXPERIMENTAL_FEATURES = "1"

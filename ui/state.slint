@@ -1,31 +1,22 @@
 import { Palette } from "std-widgets.slint";
-import { Monet } from "monet.slint";
 
 export global Theme {
     in-out property <bool> dark: true;
-    in-out property <bool> monet: true;
-    out property <bool> material: Platform.style-name == "nekodash-material" || Platform.style-name == "material";
-    changed dark => { Monet.dark = root.dark; Palette.color-scheme = root.dark ? ColorScheme.dark : ColorScheme.light; }
-    changed monet => { Monet.enabled = root.monet; }
-    out property <color> bg: monet ? Monet.background : dark ? #11151e : #f5f5fa;
-    out property <color> panel: monet ? Monet.surface-container-low : dark ? #171d29 : #ffffff;
-    out property <color> raised: monet ? Monet.surface-container-high : dark ? #222a3b : #eeeef6;
-    out property <color> border: monet ? Monet.outline-variant : dark ? #303a4d : #dddded;
-    out property <color> text: monet ? Monet.on-surface : dark ? #e5e9f3 : #252b3b;
-    out property <color> muted: monet ? Monet.on-surface-variant : dark ? #9aa7bc : #656c80;
-    out property <color> accent: monet ? Monet.primary : dark ? #aa9aff : #6951cd;
-    out property <color> on-accent: monet ? Monet.on-primary : bg;
-    out property <color> selected: monet ? Monet.primary-container : dark ? #383254 : #e5defa;
-    out property <color> on-selected: monet ? Monet.on-primary-container : accent;
-    out property <color> secondary: monet ? Monet.secondary : muted;
-    out property <color> tertiary: monet ? Monet.tertiary : accent;
+    changed dark => { Palette.color-scheme = root.dark ? ColorScheme.dark : ColorScheme.light; }
+    out property <color> bg: dark ? #101521 : #f1f5fc;
+    out property <color> panel: dark ? #192131 : #fcfdff;
+    out property <color> raised: dark ? #253149 : #e6edf8;
+    out property <color> border: dark ? #3d4d6b : #c2cee3;
+    out property <color> text: dark ? #edf2fc : #24324c;
+    out property <color> muted: dark ? #b0bdd4 : #526582;
+    out property <color> accent: dark ? #a8bffa : #4665a2;
+    out property <color> selected: dark ? #30466e : #dde7fa;
     out property <color> success: dark ? #63d7ac : #16805e;
     out property <color> warning: dark ? #f0bf75 : #946017;
-    out property <color> error: monet ? Monet.error : dark ? #ff8995 : #b82c4a;
+    out property <color> error: dark ? #f0a9bc : #a54863;
     public pure function chart-color(index: int) -> color {
-        return root.monet ? (index == 0 ? root.accent : index == 1 ? root.tertiary : index == 2 ? root.secondary : index == 3 ? root.success : root.warning)
-            : index == 0 ? root.accent : index == 1 ? root.success : index == 2 ? root.warning
-            : index == 3 ? (root.dark ? #75bbff : #2676c9) : root.error;
+        return index == 0 ? root.accent : index == 1 ? root.success : index == 2 ? root.warning
+            : index == 3 ? (root.dark ? #d9a6c2 : #966780) : root.error;
     }
 }
 
@@ -43,7 +34,7 @@ export struct Column { title: string, size: float }
 export struct DataRow { key: string, cells: [string], active: bool }
 export struct ChartSeries { label: string, path: string, color-index: int }
 export struct ChartRow { kind: int, title: string, series: [ChartSeries], maximum: string, footer: string }
-export struct ConfigRow { key: string, label: string, value: string, kind: int, checked: bool, options: [string] }
+export struct ConfigRow { key: string, label: string, value: string, kind: int, checked: bool, choice-index: int, options: [string] }
 
 export global ViewData {
     in-out property <int> page: 0;

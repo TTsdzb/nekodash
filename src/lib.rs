@@ -26,10 +26,6 @@ fn run_with_directory(
         .enable_all()
         .build()?;
     let ui = AppWindow::new()?;
-    #[cfg(debug_assertions)]
-    if std::env::var("NEKODASH_PALETTE").as_deref() == Ok("original") {
-        ui.global::<generated::Theme>().set_monet(false);
-    }
     #[cfg(target_os = "android")]
     ui.set_android_system_fonts(true);
     #[cfg(debug_assertions)]

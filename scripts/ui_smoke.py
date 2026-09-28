@@ -406,6 +406,11 @@ try:
         for index,name in [(3,"connections"),(4,"traffic"),(5,"logs"),(6,"config")]:
             navigate(index)
             screenshot(name)
+        # Enter each configuration tab: absent core values must remain unselected.
+        click_label("XD 配置")
+        screenshot("panel-settings")
+        click_label("核心配置")
+        assert 'ComboBox:' not in (output / "app.log").read_text(), "Invalid ComboBox selection warning"
         print(f"PASS: {args.size}; screenshots: {output}")
 except Exception:
     if app is not None and app.poll() is None:

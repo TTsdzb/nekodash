@@ -1,22 +1,17 @@
 import { Button, ListView } from "std-widgets.slint";
 import { Theme, I18n, ViewData, Actions, ChartRow, Column, DataRow } from "state.slint";
 
-export global IconImages {
-    public pure function get(kind: int) -> image {
-        return kind == 0 ? @image-url("icons/home.svg") : kind == 1 ? @image-url("icons/globe.svg")
-            : kind == 2 ? @image-url("icons/rules.svg") : kind == 3 ? @image-url("icons/network.svg")
-            : kind == 4 ? @image-url("icons/chart.svg") : kind == 5 ? @image-url("icons/logs.svg")
-            : kind == 6 ? @image-url("icons/settings.svg") : kind == 7 ? @image-url("icons/server.svg")
-            : kind == 8 ? @image-url("icons/up.svg") : kind == 9 ? @image-url("icons/down.svg")
-            : kind == 10 ? @image-url("icons/refresh.svg") : kind == 11 ? @image-url("icons/more.svg") : @image-url("icons/language.svg");
-    }
-}
 export component Icon inherits Image {
     in property <int> kind;
     width: 20px;
     height: 20px;
     colorize: Theme.muted;
-    source: IconImages.get(root.kind);
+    source: root.kind == 0 ? @image-url("icons/home.svg") : root.kind == 1 ? @image-url("icons/globe.svg")
+        : root.kind == 2 ? @image-url("icons/rules.svg") : root.kind == 3 ? @image-url("icons/network.svg")
+        : root.kind == 4 ? @image-url("icons/chart.svg") : root.kind == 5 ? @image-url("icons/logs.svg")
+        : root.kind == 6 ? @image-url("icons/settings.svg") : root.kind == 7 ? @image-url("icons/server.svg")
+        : root.kind == 8 ? @image-url("icons/up.svg") : root.kind == 9 ? @image-url("icons/down.svg")
+        : root.kind == 10 ? @image-url("icons/refresh.svg") : root.kind == 11 ? @image-url("icons/more.svg") : @image-url("icons/language.svg");
 }
 
 export component ActionButton inherits Rectangle {
@@ -32,48 +27,38 @@ export component ActionButton inherits Rectangle {
     vertical-stretch: 0;
     horizontal-stretch: 0;
     min-width: content.preferred-width + 24px;
-    preferred-width: content.preferred-width + (Theme.material && root.text != "" ? 56px : 24px);
-    private property <bool> native-material: Theme.material && root.text != "" && root.width >= content.preferred-width + 48px;
-    border-radius: Theme.material ? self.height / 2 : 8px;
-    border-width: Theme.material ? 0px : 1px;
+    preferred-width: content.preferred-width + 24px;
+    border-radius: 8px;
+    border-width: 1px;
     border-color: focus.has-focus ? Theme.accent : root.active ? Theme.accent.with-alpha(0.4) : Theme.border;
-    background: root.native-material ? transparent : root.primary ? Theme.accent : root.active ? Theme.selected : touch.has-hover ? Theme.raised : Theme.panel;
+    background: root.primary ? Theme.accent : root.active ? Theme.selected : touch.has-hover ? Theme.raised : Theme.panel;
     opacity: root.enabled ? 1 : 0.45;
     accessible-role: button;
     accessible-label: root.text;
     accessible-action-default => { if root.enabled { root.clicked(); } }
     focus := FocusScope {
-        enabled: root.enabled && !root.native-material;
+        enabled: root.enabled;
         key-pressed(event) => {
             if event.text == " " || event.text == "\n" { root.clicked(); return accept; }
             return reject;
         }
     }
     content := HorizontalLayout {
-        visible: !root.native-material;
         x: 0px; width: root.width; height: 20px; y: (root.height - self.height) / 2;
         alignment: center;
         spacing: 7px;
         if root.picture.width > 0 : Image { source: root.picture; width: 20px; height: 20px; image-fit: contain; }
-        if root.icon >= 0 : Icon { kind: root.icon; colorize: root.primary ? Theme.on-accent : root.active ? Theme.on-selected : Theme.muted; }
-        if root.text != "" : Text { vertical-alignment: center; text: root.text; font-size: 13px; color: root.primary ? Theme.on-accent : root.active ? Theme.on-selected : Theme.text; }
+        if root.icon >= 0 : Icon { kind: root.icon; colorize: root.primary ? Theme.bg : root.active ? Theme.accent : Theme.muted; }
+        if root.text != "" : Text { vertical-alignment: center; text: root.text; font-size: 13px; color: root.primary ? Theme.bg : root.active ? Theme.accent : Theme.text; }
     }
-    touch := TouchArea { enabled: root.enabled && !root.native-material; mouse-cursor: pointer; clicked => { focus.focus(); root.clicked(); } }
-    if root.native-material : Button {
-        width: parent.width; height: parent.height; min-width: 0px; min-height: 0px;
-        text: root.text; primary: root.primary || root.active;
-        enabled: root.enabled; icon: root.picture.width > 0 ? root.picture : root.icon >= 0 ? IconImages.get(root.icon) : @image-url("");
-        icon-size: 20px; colorize-icon: root.picture.width == 0;
-        accessible-label: root.accessible-label;
-        clicked => { root.clicked(); }
-    }
+    touch := TouchArea { enabled: root.enabled; mouse-cursor: pointer; clicked => { focus.focus(); root.clicked(); } }
     Tooltip { text: @markdown("\{root.accessible-label}"); }
 }
 
 export component Card inherits Rectangle {
     background: Theme.panel;
-    border-radius: Theme.material ? 20px : 12px;
-    border-width: Theme.material ? 0px : 1px;
+    border-radius: 12px;
+    border-width: 1px;
     border-color: Theme.border;
     @children
 }

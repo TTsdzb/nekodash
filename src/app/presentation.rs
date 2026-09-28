@@ -941,6 +941,11 @@ impl App {
                     kind: i32,
                     checked: bool,
                     options: Vec<String>| ConfigRow {
+            choice_index: options
+                .iter()
+                .position(|option| option == &value)
+                .and_then(|index| i32::try_from(index).ok())
+                .unwrap_or(-1),
             key: key.into(),
             label: self.tr(label).into(),
             value: value.into(),
