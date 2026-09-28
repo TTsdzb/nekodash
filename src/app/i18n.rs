@@ -78,6 +78,10 @@ impl Translations {
             "lastMatchedAt" => ("最近命中", "Last match"),
             "total" => ("总量", "Total"),
             "grouping" => ("分组", "Group by"),
+            "ascending" => ("升序", "Ascending"),
+            "descending" => ("降序", "Descending"),
+            "sortAscending" => ("按此列升序排列", "Sort this column ascending"),
+            "sortDescending" => ("按此列降序排列", "Sort this column descending"),
             "exportPath" => ("保存文件路径", "Save file path"),
             "importPath" => ("导入文件路径", "Import file path"),
             "operationConfirm" => (

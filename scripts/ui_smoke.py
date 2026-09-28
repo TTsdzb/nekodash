@@ -89,8 +89,10 @@ rules:
   - DOMAIN-SUFFIX,github.com,Development
   - DOMAIN-SUFFIX,youtube.com,Streaming
   - RULE-SET,fixture-rules,Proxy
-  - MATCH,Fallback
 '''
+for index in range(8):
+    config += f'  - DOMAIN,sort-{index}.example.test,DIRECT\n'
+config += '  - MATCH,Fallback\n'
 (home/'config.yaml').write_text(config)
 (home/'provider.yaml').write_text('proxies:\n  - name: Provider Direct\n    type: direct\n')
 (home/'rules.yaml').write_text('payload:\n  - example.test\n')
@@ -143,6 +145,60 @@ def click_label(label):
 def properties(handle):
     return result(rpc("get_element_properties",elementHandle=handle))
 
+def table_headers():
+    return [(handle, properties(handle)) for handle in find("DataTable::sort-header")]
+
+def show_column(title):
+    viewport = find("DataTable::list")[0]
+    viewport_geometry = properties(viewport)
+    left = viewport_geometry["absolutePosition"]["x"]
+    right = left + viewport_geometry["size"]["width"]
+    for attempt in range(30):
+        for handle, item in table_headers():
+            if item.get("accessibleLabel", "").split(" · ")[0] != title:
+                continue
+            center = item["absolutePosition"]["x"] + item["size"]["width"] / 2
+            if not left + 16 < center < right - 16:
+                rpc("scroll_element", elementHandle=viewport, deltaX=(left + right) / 2 - center)
+                time.sleep(.2)
+            return handle
+        rpc("scroll_element", elementHandle=viewport,
+            deltaX=10000 if attempt == 0 else -(right - left) / 2)
+        time.sleep(.2)
+    raise RuntimeError(f"Missing table column: {title}")
+
+def sort_column(title, descending=False):
+    header = show_column(title)
+    rpc("click_element", elementHandle=header)
+    direction = "降序" if descending else "升序"
+    wait_for(lambda: properties(header).get("accessibleLabel", "").endswith(f" · {direction}"))
+    return header
+
+def table_rows():
+    rows = []
+    headers = [item for _, item in table_headers()]
+    for handle in find("DataTable::data-row"):
+        tree = result(rpc("get_element_tree", elementHandle=handle, maxElements=150))["elements"]
+        cells = [item for item in tree if any(
+            entry.get("id") == "DataTable::cell-text" for entry in item.get("typeNamesAndIds", [])
+        )]
+        values = {}
+        for cell in cells:
+            for header in headers:
+                if abs(cell["absolutePosition"]["x"] - header["absolutePosition"]["x"] - 12) < 1:
+                    values[header.get("accessibleLabel", "").split(" · ")[0]] = cell.get("accessibleLabel", "")
+        rows.append({"handle": handle, "y": properties(handle)["absolutePosition"]["y"],
+                     "cells": values, "tree": tree})
+    return sorted(rows, key=lambda row: row["y"])
+
+def transfer(sender, receiver, size):
+    sender.sendall(b"x" * size)
+    remaining = size
+    while remaining:
+        chunk = receiver.recv(min(remaining, 65536))
+        assert chunk, "Fixture connection closed during transfer"
+        remaining -= len(chunk)
+
 def search(value):
     rpc("set_element_value",elementHandle=find("PageToolbar::search-input")[0],value=value)
     time.sleep(.3)
@@ -160,6 +216,10 @@ def wait_for(check):
                 return
         except (urllib.error.URLError, ConnectionError):
             pass
+        except RuntimeError as error:
+            # A live row can disappear between obtaining and inspecting its handle.
+            if "element that was destroyed" not in str(error):
+                raise
         time.sleep(.1)
     raise RuntimeError("Timed out waiting for UI/core state")
 
@@ -265,6 +325,19 @@ try:
         search("")
         navigate(2)
         screenshot("rules")
+        original_rules = api("/rules")["rules"]
+        sort_column("ID")
+        assert [int(row["cells"]["ID"]) for row in table_rows()[:3]] == [0, 1, 2]
+        header = sort_column("ID", descending=True)
+        assert [int(row["cells"]["ID"]) for row in table_rows()[:3]] == [13, 12, 11]
+        screenshot("rules-sorted")
+        assert [rule["payload"] for rule in api("/rules")["rules"]] == [rule["payload"] for rule in original_rules]
+        rpc("dispatch_key_event", windowHandle=window, text=" ")
+        wait_for(lambda: properties(header)["accessibleLabel"].endswith(" · 升序"))
+        assert table_rows()[0]["cells"]["ID"] == "0"
+        sort_column("类型")
+        assert table_rows()[0]["cells"]["类型"] == "Domain"
+        sort_column("ID")
         click_label("⇄")
         wait_for(lambda:api("/rules")["rules"][0]["extra"]["disabled"])
         listener=socket.socket()
@@ -276,8 +349,7 @@ try:
         tunnel.sendall(f"CONNECT 127.0.0.1:{destination} HTTP/1.1\r\nHost: 127.0.0.1:{destination}\r\n\r\n".encode())
         peer,_=listener.accept()
         assert b"200" in tunnel.recv(4096)
-        peer.sendall(b"ui-smoke"*1024)
-        assert tunnel.recv(8192)
+        transfer(peer, tunnel, 8192)
         wait_for(lambda: api("/connections").get("connections"))
         chart_listener=socket.socket()
         chart_connections.append(chart_listener)
@@ -290,8 +362,7 @@ try:
         chart_peer,_=chart_listener.accept()
         chart_connections.append(chart_peer)
         assert b"200" in chart_tunnel.recv(4096)
-        chart_peer.sendall(b"chart"*8192)
-        assert chart_tunnel.recv(40960)
+        transfer(chart_peer, chart_tunnel, 40960)
         wait_for(lambda:len(api("/connections").get("connections") or [])==2)
         navigate(0)
         time.sleep(1.2)
@@ -303,15 +374,35 @@ try:
         rpc("scroll_element",elementHandle=overview_scroll,deltaY=-2000)
         time.sleep(.25)
         screenshot("overview-lower-charts")
-        for connection in chart_connections:
-            connection.close()
-        chart_connections.clear()
-        wait_for(lambda:len(api("/connections").get("connections") or [])==1)
         navigate(3)
-        wait_for(lambda: any(item.get("accessibleLabel")=="关闭" and item.get("accessibleRole")=="Button" for item in elements()))
+        wait_for(lambda: len(table_rows()) == 2)
+        sort_column("下载速度")
+        sort_column("下载速度", descending=True)
+        sort_column("下载量")
+        show_column("主机")
+        assert table_rows()[0]["cells"]["主机"].endswith(f":{destination}")
+        header = sort_column("下载量", descending=True)
+        screenshot("connections-sorted")
+        show_column("主机")
+        assert table_rows()[0]["cells"]["主机"].endswith(f":{chart_port}")
+        # Live updates must re-sort using the selected column, preserving row identity.
+        transfer(peer, tunnel, 65536)
+        wait_for(lambda: table_rows()[0]["cells"]["主机"].endswith(f":{destination}"))
+        assert properties(header)["accessibleLabel"].endswith(" · 降序")
+        active = api("/connections")["connections"]
+        closing_id = next(item["id"] for item in active if str(item["metadata"]["destinationPort"]) == str(destination))
+        close = next(item["handle"] for item in table_rows()[0]["tree"]
+                     if item.get("accessibleRole") == "Button" and item.get("accessibleLabel") == "关闭")
+        rpc("click_element", elementHandle=close)
+        wait_for(lambda: len(api("/connections")["connections"]) == 1)
+        assert all(item["id"] != closing_id for item in api("/connections")["connections"])
+        wait_for(lambda: len(table_rows()) == 1)
         screenshot("live-connections")
         click_label("关闭")
         wait_for(lambda: not api("/connections").get("connections"))
+        for connection in chart_connections:
+            connection.close()
+        chart_connections.clear()
         for index,name in [(3,"connections"),(4,"traffic"),(5,"logs"),(6,"config")]:
             navigate(index)
             screenshot(name)

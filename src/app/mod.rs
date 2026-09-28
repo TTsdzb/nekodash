@@ -291,7 +291,16 @@ impl Application {
         let target = app.clone();
         ui.global::<Actions>().on_sort(move |index| {
             let mut app = target.borrow_mut();
-            let column = index.max(0) as usize;
+            let Ok(column) = usize::try_from(index) else {
+                return;
+            };
+            if !app
+                .ui
+                .upgrade()
+                .is_some_and(|ui| column < ui.global::<ViewData>().get_columns().row_count())
+            {
+                return;
+            }
             app.descending = app.sort == Some(column) && !app.descending;
             app.sort = Some(column);
             app.mark_dirty();

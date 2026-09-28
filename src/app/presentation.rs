@@ -5,12 +5,75 @@ use serde_json::Value;
 fn strings(values: impl IntoIterator<Item = String>) -> ModelRc<SharedString> {
     model(values.into_iter().map(Into::into).collect())
 }
-fn row(key: impl ToString, cells: Vec<String>, active: bool) -> DataRow {
-    DataRow {
-        key: key.to_string().into(),
-        cells: strings(cells),
-        active,
+#[derive(Eq, Ord, PartialEq, PartialOrd)]
+enum SortValue {
+    Empty,
+    Number(i128),
+    Text(String),
+}
+impl SortValue {
+    fn timestamp(value: &str) -> Self {
+        match chrono::DateTime::parse_from_rfc3339(value) {
+            Ok(time) => Self::Number(
+                i128::from(time.timestamp()) * 1_000_000_000
+                    + i128::from(time.timestamp_subsec_nanos()),
+            ),
+            Err(_) if value.is_empty() => Self::Empty,
+            Err(_) => value
+                .parse::<i128>()
+                .map(Self::Number)
+                .unwrap_or_else(|_| Self::Text(value.to_lowercase())),
+        }
     }
+    fn integer(value: Option<&Value>) -> Self {
+        value
+            .and_then(|v| {
+                v.as_i64()
+                    .map(i128::from)
+                    .or_else(|| v.as_u64().map(i128::from))
+            })
+            .map(Self::Number)
+            .unwrap_or(Self::Number(0))
+    }
+}
+struct TableRow {
+    view: DataRow,
+    sort_values: Vec<SortValue>,
+}
+impl TableRow {
+    fn sort_value(mut self, column: usize, value: SortValue) -> Self {
+        if let Some(slot) = self.sort_values.get_mut(column) {
+            *slot = value;
+        }
+        self
+    }
+    fn number(self, column: usize, value: impl Into<i128>) -> Self {
+        self.sort_value(column, SortValue::Number(value.into()))
+    }
+    fn timestamp(self, column: usize, value: &str) -> Self {
+        self.sort_value(column, SortValue::timestamp(value))
+    }
+}
+fn row(key: impl ToString, cells: Vec<String>, active: bool) -> TableRow {
+    let sort_values = cells
+        .iter()
+        .map(|s| SortValue::Text(s.to_lowercase()))
+        .collect();
+    TableRow {
+        view: DataRow {
+            key: key.to_string().into(),
+            cells: strings(cells),
+            active,
+        },
+        sort_values,
+    }
+}
+fn sort_rows(rows: &mut [TableRow], column: usize, descending: bool) {
+    // Stable sorting keeps equal values in their original order on every refresh.
+    rows.sort_by(|a, b| {
+        let order = a.sort_values.get(column).cmp(&b.sort_values.get(column));
+        if descending { order.reverse() } else { order }
+    });
 }
 impl App {
     pub(super) fn render_endpoints(&self, ui: &AppWindow) {
@@ -429,7 +492,7 @@ impl App {
         }
     }
     fn render_table(&self, ui: &AppWindow) {
-        let (headers, mut rows, action): (Vec<(&str, f32)>, Vec<DataRow>, &str) =
+        let (headers, mut rows, action): (Vec<(&str, f32)>, Vec<TableRow>, &str) =
             match (self.page, self.tab) {
                 (2, 0) => {
                     let rows = self
@@ -469,6 +532,18 @@ impl App {
                                 ],
                                 !disabled,
                             )
+                            .number(0, rule.index.unwrap_or(0))
+                            .sort_value(
+                                5,
+                                rule.size
+                                    .map(|v| SortValue::Number(v.into()))
+                                    .unwrap_or(SortValue::Empty),
+                            )
+                            .sort_value(6, SortValue::integer(rule.extra.get("hitCount")))
+                            .timestamp(
+                                7,
+                                &rule.extra.get("hitAt").map(value_text).unwrap_or_default(),
+                            )
                         })
                         .collect();
                     (
@@ -504,6 +579,8 @@ impl App {
                                 ],
                                 true,
                             )
+                            .number(4, p.rule_count)
+                            .timestamp(5, p.updated_at.as_deref().unwrap_or(""))
                         })
                         .collect();
                     (
@@ -555,6 +632,11 @@ impl App {
                                 ],
                                 true,
                             )
+                            .number(5, entry.down_rate)
+                            .number(6, entry.up_rate)
+                            .number(7, c.download)
+                            .number(8, c.upload)
+                            .timestamp(11, &c.start)
                         })
                         .collect();
                     (
@@ -613,6 +695,10 @@ impl App {
                                 ],
                                 true,
                             )
+                            .number(1, up)
+                            .number(2, down)
+                            .number(3, up.saturating_add(down))
+                            .number(4, count)
                         })
                         .collect();
                     (
@@ -652,6 +738,9 @@ impl App {
                                 ],
                                 true,
                             )
+                            .number(0, v.sequence)
+                            // Arrival order remains chronological across midnight.
+                            .number(1, v.sequence)
                         })
                         .collect();
                     (
@@ -669,7 +758,15 @@ impl App {
             };
         let query = self.search.to_lowercase();
         if !query.is_empty() {
-            rows.retain(|row| row.cells.iter().any(|v| v.to_lowercase().contains(&query)));
+            rows.retain(|row| {
+                row.view
+                    .cells
+                    .iter()
+                    .any(|v| v.to_lowercase().contains(&query))
+            });
+        }
+        if let Some(column) = self.sort {
+            sort_rows(&mut rows, column, self.descending);
         }
         if self.page == 3 && self.grouping > 0 {
             let index = match self.grouping {
@@ -678,24 +775,17 @@ impl App {
                 3 => 3,
                 _ => 10,
             };
-            let mut groups: BTreeMap<String, Vec<DataRow>> = BTreeMap::new();
+            let mut groups: BTreeMap<String, Vec<TableRow>> = BTreeMap::new();
             for item in rows {
-                let key = item.cells.row_data(index).unwrap_or_default().to_string();
+                let key = item
+                    .view
+                    .cells
+                    .row_data(index)
+                    .unwrap_or_default()
+                    .to_string();
                 groups.entry(key).or_default().push(item);
             }
             rows = groups.into_values().flatten().collect();
-        }
-        if let Some(column) = self.sort {
-            rows.sort_by(|a, b| {
-                let a = a.cells.row_data(column).unwrap_or_default();
-                let b = b.cells.row_data(column).unwrap_or_default();
-                let order = compare(&a, &b);
-                if self.descending {
-                    order.reverse()
-                } else {
-                    order
-                }
-            });
         }
         let columns: Vec<_> = headers
             .into_iter()
@@ -705,7 +795,11 @@ impl App {
             })
             .collect();
         let v = ui.global::<ViewData>();
-        v.set_table_width(columns.iter().map(|c| c.size).sum::<f32>() + 72.);
+        v.set_sort_index(self.sort.and_then(|v| i32::try_from(v).ok()).unwrap_or(-1));
+        v.set_sort_descending(self.descending);
+        v.set_table_width(
+            columns.iter().map(|c| c.size).sum::<f32>() + if action.is_empty() { 0. } else { 72. },
+        );
         if !v.get_columns().iter().eq(columns.iter().cloned()) {
             v.set_columns(model(columns));
         }
@@ -715,6 +809,7 @@ impl App {
             self.tr(action).into()
         });
         v.set_table_status(format!("{} {}", rows.len(), self.tr("total")).into());
+        let mut rows: Vec<_> = rows.into_iter().map(|row| row.view).collect();
         for (index, item) in rows.iter_mut().enumerate() {
             if let Some(old) = self.rows.row_data(index)
                 && old.cells.iter().eq(item.cells.iter())
@@ -994,26 +1089,6 @@ impl App {
             .collect()
     }
 }
-fn compare(a: &str, b: &str) -> std::cmp::Ordering {
-    fn number(value: &str) -> Option<f64> {
-        let mut words = value.split_whitespace();
-        let num = words.next()?.parse::<f64>().ok()?;
-        let unit = words.next().unwrap_or("").trim_end_matches("/s");
-        let scale = match unit {
-            "KB" => 1024.,
-            "MB" => 1024f64.powi(2),
-            "GB" => 1024f64.powi(3),
-            "TB" => 1024f64.powi(4),
-            _ => 1.,
-        };
-        Some(num * scale)
-    }
-    match (number(a), number(b)) {
-        (Some(a), Some(b)) => a.total_cmp(&b),
-        _ => a.to_lowercase().cmp(&b.to_lowercase()),
-    }
-}
-
 fn wedge(start: f64, end: f64) -> String {
     if end <= start {
         return String::new();
@@ -1037,11 +1112,59 @@ fn wedge(start: f64, end: f64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn row_keys(rows: &[TableRow]) -> Vec<String> {
+        rows.iter().map(|row| row.view.key.to_string()).collect()
+    }
     #[test]
-    fn sorts_formatted_traffic_numerically() {
-        assert!(compare("900 KB/s", "1.0 MB/s").is_lt());
-        assert!(compare("2", "10").is_lt());
-        assert!(compare("0 B", "20 B").is_lt());
+    fn sorts_raw_bytes_even_when_display_values_are_identical() {
+        assert_eq!(bytes(1024), bytes(1025));
+        let mut rows = vec![
+            row("larger", vec![bytes(1025)], true).number(0, 1025),
+            row("equal-first", vec![bytes(1024)], true).number(0, 1024),
+            row("equal-second", vec![bytes(1024)], true).number(0, 1024),
+            row("small", vec![bytes(900)], true).number(0, 900),
+        ];
+        sort_rows(&mut rows, 0, false);
+        assert_eq!(
+            row_keys(&rows),
+            ["small", "equal-first", "equal-second", "larger"]
+        );
+        sort_rows(&mut rows, 0, true);
+        assert_eq!(
+            row_keys(&rows),
+            ["larger", "equal-first", "equal-second", "small"]
+        );
+    }
+    #[test]
+    fn counts_retain_integer_precision() {
+        let mut rows = vec![
+            row("maximum", vec![u64::MAX.to_string()], true).number(0, u64::MAX),
+            row("previous", vec![(u64::MAX - 1).to_string()], true).number(0, u64::MAX - 1),
+        ];
+        sort_rows(&mut rows, 0, false);
+        assert_eq!(row_keys(&rows), ["previous", "maximum"]);
+    }
+    #[test]
+    fn text_columns_keep_words_after_leading_numbers() {
+        let mut rows = vec![
+            row("beta", vec!["2 beta".into()], true),
+            row("alpha", vec!["2 Alpha".into()], true),
+        ];
+        sort_rows(&mut rows, 0, false);
+        assert_eq!(row_keys(&rows), ["alpha", "beta"]);
+    }
+    #[test]
+    fn timestamps_compare_instants_including_offsets_and_fractions() {
+        let a = "2026-09-28T09:00:00+08:00";
+        let b = "2026-09-28T02:00:00Z";
+        let c = "2026-09-28T02:00:00.000000001Z";
+        let mut rows = vec![
+            row("later", vec![c.into()], true).timestamp(0, c),
+            row("utc", vec![b.into()], true).timestamp(0, b),
+            row("offset", vec![a.into()], true).timestamp(0, a),
+        ];
+        sort_rows(&mut rows, 0, false);
+        assert_eq!(row_keys(&rows), ["offset", "utc", "later"]);
     }
     #[test]
     fn pie_paths_handle_empty_and_single_category() {
