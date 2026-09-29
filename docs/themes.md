@@ -2,6 +2,8 @@
 
 `logo.png` 是透明图标源文件。`python3 scripts/generate_icons.py` 使用 ImageMagick
 生成窗口图标、Windows ICO、macOS ICNS 和 Android 各密度启动器资源。
+Android 启动器使用自适应图标：`#30466E` 纯色背景与透明前景分层，由系统提供图标形状。
+前景位于 108 dp 画布中央，主体宽度为 66 dp。
 Linux 发布包中的 `install.sh` 安装用户级应用、菜单项与图标；需要将
 `~/.local/bin` 加入 `PATH`。
 
