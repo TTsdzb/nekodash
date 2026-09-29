@@ -137,9 +137,10 @@ export component AppWindow inherits Window {
                 }
             }
         }
-        if root.more-open : Card {
+        if root.mobile && root.more-open : more-menu := Card {
             x: 12px; y: safe-content.height - self.height - 72px; width: safe-content.width - 24px;
-            HorizontalLayout { padding: 14px; spacing: 12px; for n in [4, 5, 6] : ActionButton { horizontal-stretch: 1; text: I18n.tr(root.pages[n]); icon: n; clicked => { root.more-open = false; Actions.navigate(n); } } }
+            height: 64px;
+            HorizontalLayout { padding: 14px; spacing: 12px; for n in [4, 5, 6] : more-menu-button := ActionButton { height: 36px; horizontal-stretch: 1; text: I18n.tr(root.pages[n]); icon: n; clicked => { root.more-open = false; Actions.navigate(n); } } }
         }
         if ViewData.message != "" : toast := Rectangle {
             x: max(16px, (safe-content.width - 640px) / 2); y: 12px;

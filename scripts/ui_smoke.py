@@ -293,6 +293,14 @@ try:
                 if index in [4,5,6]:
                     rpc("click_element",elementHandle=find("AppWindow::mobile-nav")[2])
                     time.sleep(.15)
+                    menu=properties(find("AppWindow::more-menu")[0])
+                    nav=properties(find("AppWindow::mobile-nav")[2])
+                    assert abs(menu["size"]["height"]-64)<1
+                    assert menu["absolutePosition"]["y"]>=0
+                    assert menu["absolutePosition"]["y"]+menu["size"]["height"]<nav["absolutePosition"]["y"]
+                    for handle in find("AppWindow::more-menu-button"):
+                        assert abs(properties(handle)["size"]["height"]-36)<1
+                    screenshot("more-menu")
                     click_label(["流量","日志","配置"][index-4])
                 else:
                     rpc("click_element",elementHandle=find("AppWindow::mobile-nav")[[0,1,2,3].index(index)+(1 if index>1 else 0)])
@@ -301,6 +309,14 @@ try:
             time.sleep(.3)
         navigate(1)
         screenshot("proxies")
+        expanded=properties(find("ProxyGroup::expand-button")[0])
+        rpc("click_element",elementHandle=find("ProxyGroup::expand-button")[0])
+        time.sleep(.3)
+        screenshot("proxy-collapsed")
+        collapsed=properties(find("ProxyGroup::expand-button")[0])
+        assert expanded["accessibleLabel"]!=collapsed["accessibleLabel"]
+        rpc("click_element",elementHandle=find("ProxyGroup::expand-button")[0])
+        time.sleep(.3)
         if not mobile:
             click_label("Tokyo 02")
             wait_for(lambda:api("/proxies/Proxy")["now"]=="Tokyo 02")
