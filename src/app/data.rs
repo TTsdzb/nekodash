@@ -126,16 +126,17 @@ impl Data {
             StreamData::Connections(None) => {
                 self.update_connections(Connections::default(), connection_limit, track)
             }
-            StreamData::Log(v) => {
-                self.next_log = self.next_log.saturating_add(1);
-                self.logs.push_back(LogEntry {
-                    sequence: self.next_log,
-                    time: chrono::Local::now().format("%H:%M:%S%.3f").to_string(),
-                    log: v.clone(),
-                });
-                trim(&mut self.logs, log_limit);
-            }
+            StreamData::Log(v) => self.push_log(v.clone(), log_limit),
         }
+    }
+    pub fn push_log(&mut self, log: Log, limit: usize) {
+        self.next_log = self.next_log.saturating_add(1);
+        self.logs.push_back(LogEntry {
+            sequence: self.next_log,
+            time: chrono::Local::now().format("%H:%M:%S%.3f").to_string(),
+            log,
+        });
+        trim(&mut self.logs, limit);
     }
     pub fn update_connections(&mut self, value: Connections, limit: usize, track: bool) {
         self.upload_total = value.upload_total;

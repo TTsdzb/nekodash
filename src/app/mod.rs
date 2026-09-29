@@ -1,6 +1,7 @@
 mod commands;
 mod data;
 mod i18n;
+mod log_inbox;
 mod presentation;
 mod settings;
 pub(super) use settings::data_dir as application_data_dir;
@@ -48,6 +49,7 @@ struct App {
     ui: slint::Weak<AppWindow>,
     runtime: Handle,
     tx: mpsc::Sender<Event>,
+    logs_inbox: Arc<log_inbox::LogInbox>,
     saves: mpsc::Sender<Save>,
     session: Session,
     store: EndpointStore,
@@ -203,6 +205,7 @@ impl Application {
             runtime: runtime.clone(),
             tx,
             saves,
+            logs_inbox: Arc::new(log_inbox::LogInbox::default()),
             session: Session::default(),
             store,
             page: settings.default_page,
@@ -324,6 +327,7 @@ impl Application {
                         Err(_) => break,
                     }
                 }
+                app.drain_logs();
                 if app
                     .notice_until
                     .get()
@@ -584,6 +588,7 @@ impl App {
         let Some(context) = self.session.current() else {
             return;
         };
+        self.logs_inbox.activate(context.token.clone());
         let level = [
             LogLevel::Debug,
             LogLevel::Info,
@@ -611,9 +616,25 @@ impl App {
             match event.result {
                 Ok(mut subscription) => {
                     let tx = self.tx.clone();
+                    let logs = self.logs_inbox.clone();
                     self.runtime.spawn(async move {
                         loop {
                             let event = subscription.recv().await;
+                            if matches!(kind, StreamKind::Logs(_)) {
+                                match &event.result {
+                                    Ok(StreamEvent::Data(value)) => {
+                                        if let StreamData::Log(log) = value.as_ref() {
+                                            logs.push(&event.token, log.clone());
+                                            continue;
+                                        }
+                                    }
+                                    Err(error) if error.kind == ErrorKind::Lagged => {
+                                        logs.gap(&event.token, error.to_string());
+                                        continue;
+                                    }
+                                    _ => {}
+                                }
+                            }
                             let finished = event
                                 .result
                                 .as_ref()
@@ -627,6 +648,36 @@ impl App {
                 Err(e) => self.error(&e),
             }
         }
+    }
+    fn drain_logs(&mut self) {
+        let Some(batch) = self.logs_inbox.take(self.settings.log_limit) else {
+            return;
+        };
+        if !self.session.accepts(&batch.token) {
+            return;
+        }
+        let retained = batch.logs.len();
+        for log in batch.logs {
+            self.data.push_log(log, self.settings.log_limit);
+        }
+        if batch.dropped > 0 || batch.gap.is_some() {
+            self.data.push_log(
+                models::Log {
+                    level: "warning".into(),
+                    payload: format!(
+                        "{}: {}{}",
+                        self.tr("logsSkipped"),
+                        batch
+                            .dropped
+                            .saturating_add(u64::from(retained >= self.settings.log_limit)),
+                        batch.gap.map(|v| format!("; {v}")).unwrap_or_default()
+                    ),
+                },
+                self.settings.log_limit,
+            );
+        }
+        self.dirty_pages.set(self.dirty_pages.get() | (1 << 5));
+        self.dirty = true;
     }
     fn event(&mut self, event: Event) {
         let pending_pages = self.dirty_pages.get();

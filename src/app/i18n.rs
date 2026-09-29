@@ -63,6 +63,10 @@ impl Translations {
             "toggleRule" => ("切换规则状态", "Toggle rule"),
             "enableRule" => ("启用规则", "Enable rule"),
             "disableRule" => ("禁用规则", "Disable rule"),
+            "logsSkipped" => (
+                "日志积压，已保留最新记录，本地跳过条数",
+                "Log backlog; latest records retained, locally skipped",
+            ),
             "edit" => ("编辑", "Edit"),
             "delete" => ("删除", "Delete"),
             "copy" => ("复制", "Copy"),
