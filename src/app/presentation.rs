@@ -558,7 +558,7 @@ impl App {
                             ("lastMatchedAt", 160.),
                         ],
                         rows,
-                        "⇄",
+                        "toggleRule",
                     )
                 }
                 (2, _) => {
@@ -808,6 +808,7 @@ impl App {
         } else {
             self.tr(action).into()
         });
+        v.set_row_action_icon(if action == "toggleRule" { 15 } else { -1 });
         v.set_table_status(format!("{} {}", rows.len(), self.tr("total")).into());
         let mut rows: Vec<_> = rows.into_iter().map(|row| row.view).collect();
         for (index, item) in rows.iter_mut().enumerate() {

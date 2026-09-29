@@ -12,7 +12,8 @@ export component Icon inherits Image {
         : root.kind == 6 ? @image-url("icons/settings.svg") : root.kind == 7 ? @image-url("icons/server.svg")
         : root.kind == 8 ? @image-url("icons/up.svg") : root.kind == 9 ? @image-url("icons/down.svg")
         : root.kind == 10 ? @image-url("icons/refresh.svg") : root.kind == 11 ? @image-url("icons/more.svg")
-        : root.kind == 13 ? @image-url("icons/chevron-down.svg") : root.kind == 14 ? @image-url("icons/chevron-right.svg") : @image-url("icons/language.svg");
+        : root.kind == 13 ? @image-url("icons/chevron-down.svg") : root.kind == 14 ? @image-url("icons/chevron-right.svg")
+        : root.kind == 15 ? @image-url("icons/switch.svg") : @image-url("icons/language.svg");
 }
 
 export component ActionButton inherits Rectangle {
@@ -155,7 +156,9 @@ export component DataTable inherits Card {
             area := TouchArea { mouse-cursor: pointer; double-clicked => { Actions.invoke("detail", row.key, ""); } }
             if root.row-action != "" : ActionButton {
                 x: max(8px, -list.content-x + 8px); y: (parent.height - 32px) / 2; width: 54px; height: 32px; min-height: 32px;
-                text: root.row-action;
+                icon: ViewData.row-action-icon;
+                text: ViewData.row-action-icon >= 0 ? "" : root.row-action;
+                accessible-label: ViewData.row-action-icon == 15 ? I18n.tr(row.active ? "disableRule" : "enableRule") : root.row-action;
                 clicked => { Actions.invoke("row-action", row.key, ""); }
             }
         }

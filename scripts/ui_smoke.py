@@ -20,6 +20,7 @@ parser.add_argument("--binary", default="target/debug/nekodash")
 parser.add_argument("--mihomo", default=shutil.which("mihomo"))
 parser.add_argument("--size", default="1280x820")
 parser.add_argument("--output", default="target/ui-smoke")
+parser.add_argument("--proxy-scroll-only", action="store_true")
 args = parser.parse_args()
 if not args.mihomo:
     parser.error("Provide --mihomo with a test executable")
@@ -94,6 +95,12 @@ for index in range(8):
     config += f'  - DOMAIN,sort-{index}.example.test,DIRECT\n'
 config += '  - MATCH,Fallback\n'
 (home/'config.yaml').write_text(config)
+if args.proxy_scroll_only:
+    extra=[f'Scroll node {i:03}' for i in range(90)]
+    config=config.replace('proxy-groups:', ''.join(f'  - name: {name}\n    type: direct\n' for name in extra)+'proxy-groups:')
+    config=config.replace('proxies: [Hong Kong 01, Hong Kong 02,', 'proxies: ['+', '.join(extra)+', Hong Kong 01, Hong Kong 02,',1)
+    config=config.replace('proxy-providers:', ''.join(f'  - name: Short group {i}\n    type: select\n    proxies: [DIRECT, REJECT]\n' for i in range(6))+'proxy-providers:')
+    (home/'config.yaml').write_text(config)
 (home/'provider.yaml').write_text('proxies:\n  - name: Provider Direct\n    type: direct\n')
 (home/'rules.yaml').write_text('payload:\n  - example.test\n')
 
@@ -309,6 +316,39 @@ try:
             time.sleep(.3)
         navigate(1)
         screenshot("proxies")
+        if args.proxy_scroll_only:
+            viewport=find("ProxiesPage::proxy-scroll")[0]
+            def group_positions():
+                for attempt in range(5):
+                    try:
+                        return [(round(p["absolutePosition"]["x"],1), round(p["absolutePosition"]["y"],1), round(p["size"]["height"],1))
+                                for p in (properties(h) for h in find("ProxiesPage::group"))]
+                    except RuntimeError as error:
+                        if "destroyed" not in str(error) or attempt==4:
+                            raise
+                        time.sleep(.1)
+            initial=group_positions()
+            rpc("scroll_element",elementHandle=viewport,deltaY=-(initial[0][2]+340))
+            time.sleep(.5)
+            samples=[group_positions()]
+            assert samples[0], "Expected visible proxy group geometry"
+            assert samples[0]!=initial, "Proxy viewport did not scroll"
+            for x in {p[0] for p in samples[0]}:
+                column=sorted(p for p in samples[0] if p[0]==x)
+                assert all(a[1]+a[2]<=b[1] for a,b in zip(column,column[1:])), "Proxy groups overlap"
+            screenshot("proxy-scroll-before")
+            for tick in range(6):
+                time.sleep(1)
+                request=urllib.request.Request(f"http://127.0.0.1:{core_port}/proxies/Proxy", data=json.dumps({"name": "Tokyo 01" if tick%2 else "Tokyo 02"}).encode(), method="PUT", headers={"Authorization":"Bearer ui-fixture","Content-Type":"application/json"})
+                with urllib.request.urlopen(request,timeout=5):
+                    pass
+                click_label("刷新")
+                samples.append(group_positions())
+            screenshot("proxy-scroll-after")
+            (output/"proxy-scroll-positions.json").write_text(json.dumps(samples,ensure_ascii=False,indent=2))
+            assert all(s==samples[0] for s in samples), f"Proxy groups moved during refresh: {samples}"
+            print(f"PASS: stable proxy scroll at {args.size}")
+            raise SystemExit(0)
         expanded=properties(find("ProxyGroup::expand-button")[0])
         rpc("click_element",elementHandle=find("ProxyGroup::expand-button")[0])
         time.sleep(.3)
@@ -341,6 +381,14 @@ try:
         search("")
         navigate(2)
         screenshot("rules")
+        click_label("禁用规则")
+        wait_for(lambda:api("/rules")["rules"][0].get("extra",{}).get("disabled",False))
+        wait_for(lambda:any(item.get("accessibleLabel")=="启用规则" for item in elements()))
+        rpc("hover_element",elementHandle=button("启用规则"))
+        time.sleep(1.2)
+        screenshot("rule-toggle")
+        click_label("启用规则")
+        wait_for(lambda:not api("/rules")["rules"][0].get("extra",{}).get("disabled",False))
         original_rules = api("/rules")["rules"]
         sort_column("ID")
         assert [int(row["cells"]["ID"]) for row in table_rows()[:3]] == [0, 1, 2]
@@ -354,7 +402,7 @@ try:
         sort_column("类型")
         assert table_rows()[0]["cells"]["类型"] == "Domain"
         sort_column("ID")
-        click_label("⇄")
+        click_label("禁用规则")
         wait_for(lambda:api("/rules")["rules"][0]["extra"]["disabled"])
         listener=socket.socket()
         listener.settimeout(5)

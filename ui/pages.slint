@@ -1,4 +1,4 @@
-import { LineEdit, TextEdit, ComboBox, CheckBox, ScrollView, ListView, Spinner } from "std-widgets.slint";
+import { LineEdit, TextEdit, ComboBox, CheckBox, ScrollView, Spinner } from "std-widgets.slint";
 import { ViewData, Actions, Theme, I18n, GroupRow, NodeRow } from "state.slint";
 import { Icon, ActionButton, Card, SectionTitle, ChartCard, DataTable } from "widgets.slint";
 
@@ -136,14 +136,20 @@ component ProxyGroup inherits Card {
 
 export component ProxiesPage inherits Rectangle {
     private property <int> cols: self.width > 980px ? 2 : 1;
-    ListView {
+    // Groups can differ by thousands of pixels. Lay out their actual heights so
+    // refreshing a group cannot change the viewport through ListView estimates.
+    proxy-scroll := ScrollView {
         content-width: self.width;
-        for row in ceil(ViewData.groups.length / root.cols) : HorizontalLayout {
-            spacing: 16px; padding-bottom: 16px;
-            for col in root.cols : Rectangle {
-                width: (root.width - (root.cols - 1) * 16px) / root.cols;
-                preferred-height: group.preferred-height;
-                group := ProxyGroup { y: 0px; width: parent.width; height: self.preferred-height; data: ViewData.groups[row * root.cols + col]; visible: row * root.cols + col < ViewData.groups.length; }
+        VerticalLayout {
+            height: self.preferred-height;
+            spacing: 0px; alignment: start;
+            for row in ceil(ViewData.groups.length / root.cols) : HorizontalLayout {
+                spacing: 16px; padding-bottom: 16px;
+                for col in root.cols : Rectangle {
+                    width: (root.width - (root.cols - 1) * 16px) / root.cols;
+                    min-height: group.preferred-height;
+                    group := ProxyGroup { y: 0px; width: parent.width; height: self.preferred-height; data: ViewData.groups[row * root.cols + col]; visible: row * root.cols + col < ViewData.groups.length; }
+                }
             }
         }
     }
