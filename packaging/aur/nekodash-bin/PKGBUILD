@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: 0BSD
+
+pkgname=nekodash-bin
+pkgver=0.1.3
+pkgrel=1
+pkgdesc='Native Mihomo dashboard built with Rust and Slint'
+arch=('x86_64')
+url='https://github.com/TTsdzb/nekodash'
+license=('MIT')
+depends=(
+  'glibc' 'gcc-libs' 'fontconfig' 'hicolor-icon-theme'
+  # The windowing backend loads these graphics libraries at runtime.
+  'libglvnd' 'libxkbcommon' 'libxkbcommon-x11' 'wayland'
+  'libx11' 'libxcb' 'libxcursor' 'libxi' 'libxrender'
+)
+provides=("nekodash=${pkgver}")
+conflicts=('nekodash')
+options=('!strip' '!debug')
+source=("${pkgname}-${pkgver}-${arch[0]}.tar.gz::${url}/releases/download/v${pkgver}/NekoDash-linux-${arch[0]}.tar.gz")
+sha256sums=('ca1ada505cb79cc33c52b3996e692b4373dff0d6b51278147cf500803ff1ebd0')
+
+package() {
+  cd "${srcdir}/NekoDash"
+  install -Dm755 nekodash "${pkgdir}/usr/bin/nekodash"
+  install -Dm644 io.github.nekodash.panel.desktop \
+    "${pkgdir}/usr/share/applications/io.github.nekodash.panel.desktop"
+  install -Dm644 nekodash.png \
+    "${pkgdir}/usr/share/icons/hicolor/256x256/apps/io.github.nekodash.panel.png"
+  install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+  install -Dm644 LICENSE-MetaCubeXD \
+    "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE-MetaCubeXD"
+}

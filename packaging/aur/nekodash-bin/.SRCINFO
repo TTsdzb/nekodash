@@ -1,0 +1,28 @@
+pkgbase = nekodash-bin
+	pkgdesc = Native Mihomo dashboard built with Rust and Slint
+	pkgver = 0.1.3
+	pkgrel = 1
+	url = https://github.com/TTsdzb/nekodash
+	arch = x86_64
+	license = MIT
+	depends = glibc
+	depends = gcc-libs
+	depends = fontconfig
+	depends = hicolor-icon-theme
+	depends = libglvnd
+	depends = libxkbcommon
+	depends = libxkbcommon-x11
+	depends = wayland
+	depends = libx11
+	depends = libxcb
+	depends = libxcursor
+	depends = libxi
+	depends = libxrender
+	provides = nekodash=0.1.3
+	conflicts = nekodash
+	options = !strip
+	options = !debug
+	source = nekodash-bin-0.1.3-x86_64.tar.gz::https://github.com/TTsdzb/nekodash/releases/download/v0.1.3/NekoDash-linux-x86_64.tar.gz
+	sha256sums = ca1ada505cb79cc33c52b3996e692b4373dff0d6b51278147cf500803ff1ebd0
+
+pkgname = nekodash-bin
