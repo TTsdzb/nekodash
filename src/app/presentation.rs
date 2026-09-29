@@ -367,6 +367,12 @@ impl App {
         replace(&self.charts, charts);
     }
     fn render_groups(&self) {
+        self.group_icons.retain_sources(
+            self.data
+                .proxies
+                .values()
+                .filter_map(|proxy| proxy.icon.as_deref()),
+        );
         let query = self.search.to_lowercase();
         let mut groups = Vec::new();
         let make_node = |name: &str, proxy: Option<&models::Proxy>, current: &str| {
@@ -424,6 +430,15 @@ impl App {
                 self.sort_nodes(&mut nodes);
                 groups.push(GroupRow {
                     name: group.name.clone().into(),
+                    icon: self.group_icons.get(
+                        group.icon.as_deref().unwrap_or_default(),
+                        &self.runtime,
+                        &self.tx,
+                    ),
+                    tint_icon: group
+                        .icon
+                        .as_deref()
+                        .is_some_and(|v| v.starts_with("data:image/svg+xml")),
                     kind: group.kind.clone().into(),
                     current: group.now.clone().into(),
                     fixed: group.fixed.as_ref().is_some_and(|v| !v.is_empty()),
@@ -463,6 +478,8 @@ impl App {
                     .unwrap_or_else(|| provider.updated_at.clone().unwrap_or_default());
                 groups.push(GroupRow {
                     name: provider.name.clone().into(),
+                    icon: slint::Image::default(),
+                    tint_icon: false,
                     kind: provider.vehicle_type.clone().into(),
                     current: current.into(),
                     fixed: false,

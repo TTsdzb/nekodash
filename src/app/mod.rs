@@ -1,6 +1,7 @@
 mod commands;
 mod data;
 mod i18n;
+mod icons;
 mod log_inbox;
 mod presentation;
 mod settings;
@@ -29,6 +30,7 @@ struct Pending {
     token: Option<SessionToken>,
 }
 enum Event {
+    Icon(String, std::result::Result<icons::Download, String>),
     Usage(SessionToken, AppResult<BTreeMap<String, data::Usage>>),
     Recovery(SessionEvent<RecoveryReport>),
     Snapshot(u64, SessionEvent<CoreSnapshot>),
@@ -50,6 +52,7 @@ struct App {
     runtime: Handle,
     tx: mpsc::Sender<Event>,
     logs_inbox: Arc<log_inbox::LogInbox>,
+    group_icons: icons::GroupIcons,
     saves: mpsc::Sender<Save>,
     session: Session,
     store: EndpointStore,
@@ -206,6 +209,7 @@ impl Application {
             tx,
             saves,
             logs_inbox: Arc::new(log_inbox::LogInbox::default()),
+            group_icons: icons::GroupIcons::new()?,
             session: Session::default(),
             store,
             page: settings.default_page,
@@ -683,6 +687,10 @@ impl App {
         let pending_pages = self.dirty_pages.get();
         self.mark_dirty();
         match event {
+            Event::Icon(source, result) => {
+                self.group_icons.complete(&source, result);
+                self.dirty_pages.set(pending_pages | (1 << 1));
+            }
             Event::Usage(token, result) => {
                 if !self.session.accepts(&token) {
                     return;

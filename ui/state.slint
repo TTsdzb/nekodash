@@ -29,7 +29,7 @@ export global I18n {
 export struct EndpointRow { id: string, label: string, url: string, selected: bool }
 export struct Stat { label: string, value: string, icon: int }
 export struct NodeRow { name: string, kind: string, delay: string, latency: int, selected: bool, udp: bool }
-export struct GroupRow { name: string, kind: string, current: string, fixed: bool, expanded: bool, count: string, nodes: [NodeRow] }
+export struct GroupRow { name: string, icon: image, tint-icon: bool, kind: string, current: string, fixed: bool, expanded: bool, count: string, nodes: [NodeRow] }
 export struct Column { title: string, size: float }
 export struct DataRow { key: string, cells: [string], active: bool }
 export struct ChartSeries { label: string, path: string, color-index: int }

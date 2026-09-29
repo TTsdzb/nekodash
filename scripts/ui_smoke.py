@@ -21,6 +21,7 @@ parser.add_argument("--mihomo", default=shutil.which("mihomo"))
 parser.add_argument("--size", default="1280x820")
 parser.add_argument("--output", default="target/ui-smoke")
 parser.add_argument("--proxy-scroll-only", action="store_true")
+parser.add_argument("--group-icons-only", action="store_true")
 args = parser.parse_args()
 if not args.mihomo:
     parser.error("Provide --mihomo with a test executable")
@@ -95,6 +96,12 @@ for index in range(8):
     config += f'  - DOMAIN,sort-{index}.example.test,DIRECT\n'
 config += '  - MATCH,Fallback\n'
 (home/'config.yaml').write_text(config)
+if args.group_icons_only:
+    svg='<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><circle cx="12" cy="12" r="10" fill="#f0bf75"/></svg>'
+    inline='data:image/svg+xml;base64,'+base64.b64encode(svg.encode()).decode()
+    for group,source in [('Proxy','http://icons.example.invalid/group.svg'),('Streaming',inline),('Development','http://icons.example.invalid/group.svg'),('Fallback','http://icons.example.invalid/missing.svg')]:
+        config=config.replace(f'  - name: {group}\n',f'  - name: {group}\n    icon: "{source}"\n')
+    (home/'config.yaml').write_text(config)
 if args.proxy_scroll_only:
     extra=[f'Scroll node {i:03}' for i in range(90)]
     config=config.replace('proxy-groups:', ''.join(f'  - name: {name}\n    type: direct\n' for name in extra)+'proxy-groups:')
@@ -237,9 +244,17 @@ peer=None
 tunnel=None
 chart_connections=[]
 delay_server=None
+icon_requests=[]
 
 class DelayHandler(BaseHTTPRequestHandler):
     def do_GET(self):
+        if self.path.startswith('http://icons.example.invalid/'):
+            icon_requests.append((self.path,self.headers.get('Authorization')))
+            self.send_response(404 if self.path.endswith('missing.svg') else 200)
+            self.send_header('Content-Type','image/svg+xml')
+            self.end_headers()
+            self.wfile.write(b'<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><circle cx="12" cy="12" r="10" fill="#f0bf75"/></svg>')
+            return
         time.sleep(.025)
         self.send_response(204)
         self.end_headers()
@@ -254,7 +269,12 @@ try:
     threading.Thread(target=delay_server.serve_forever,daemon=True).start()
     with (output/"core.log").open("w") as core_log, (output/"app.log").open("w") as app_log:
         core=subprocess.Popen([args.mihomo,"-d",str(home)],stdout=core_log,stderr=core_log)
-        app=subprocess.Popen([str(Path(args.binary).resolve())],stdout=app_log,stderr=app_log,env=dict(os.environ,SLINT_BACKEND="headless",SLINT_MCP_PORT=str(mcp_port),NEKODASH_WINDOW_SIZE=args.size,NEKODASH_DATA_DIR=str(home/"settings")))
+        app_env=dict(os.environ,SLINT_BACKEND="headless",SLINT_MCP_PORT=str(mcp_port),NEKODASH_WINDOW_SIZE=args.size,NEKODASH_DATA_DIR=str(home/"settings"))
+        if args.group_icons_only:
+            for key in ['HTTP_PROXY','http_proxy','HTTPS_PROXY','https_proxy','ALL_PROXY','all_proxy']:
+                app_env[key]=f'http://127.0.0.1:{delay_port}'
+            app_env['NO_PROXY']=app_env['no_proxy']=''
+        app=subprocess.Popen([str(Path(args.binary).resolve())],stdout=app_log,stderr=app_log,env=app_env)
         wait_for(lambda: result(rpc("list_windows")).get("windowHandles",[]))
         window=result(rpc("list_windows")).get("windowHandles",[])[0]
         screenshot("connect")
@@ -316,6 +336,19 @@ try:
             time.sleep(.3)
         navigate(1)
         screenshot("proxies")
+        if args.group_icons_only:
+            wait_for(lambda:len(find("ProxyGroup::group-icon"))>=2)
+            time.sleep(.5)
+            screenshot("group-icons")
+            for _ in range(3):
+                click_label("刷新")
+                time.sleep(.5)
+            assert icon_requests.count(('http://icons.example.invalid/group.svg',None))==1, icon_requests
+            assert icon_requests.count(('http://icons.example.invalid/missing.svg',None))==1, icon_requests
+            assert all(auth is None for _,auth in icon_requests), 'Icon requests leaked core credentials'
+            assert not find("AppWindow::toast"), 'Image errors must not interrupt the page'
+            print('PASS: remote icons via proxy, inline SVG, shared cache and failed-load backoff')
+            raise SystemExit(0)
         if args.proxy_scroll_only:
             viewport=find("ProxiesPage::proxy-scroll")[0]
             def group_positions():
