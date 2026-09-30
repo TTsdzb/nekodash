@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: 0BSD
 
 pkgname=nekodash-bin
-pkgver=0.1.3
+pkgver=0.1.4
 pkgrel=1
 pkgdesc='Native Mihomo dashboard built with Rust and Slint'
 arch=('x86_64')
@@ -17,7 +17,7 @@ provides=("nekodash=${pkgver}")
 conflicts=('nekodash')
 options=('!strip' '!debug')
 source=("${pkgname}-${pkgver}-${arch[0]}.tar.gz::${url}/releases/download/v${pkgver}/NekoDash-linux-${arch[0]}.tar.gz")
-sha256sums=('ca1ada505cb79cc33c52b3996e692b4373dff0d6b51278147cf500803ff1ebd0')
+sha256sums=('f88b593f01d782a62322054036fc29426ffe4e991eae927934ff19f6d7272665')
 
 package() {
   cd "${srcdir}/NekoDash"
