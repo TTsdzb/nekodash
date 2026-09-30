@@ -29,7 +29,7 @@ def main():
     paths = sorted((ROOT/'ui').rglob('*.slint')) + sorted((ROOT/'src').rglob('*.rs'))
     failures = []
     for path in paths:
-        for line, value in violations(path.read_text(), path.suffix == '.slint'):
+        for line, value in violations(path.read_text(encoding="utf-8"), path.suffix == '.slint'):
             failures.append(f'{path.relative_to(ROOT)}:{line}: use an SVG icon, not {value!r}')
     if failures:
         print('\n'.join(failures), file=sys.stderr)
