@@ -287,6 +287,13 @@ try:
         rpc("click_element",elementHandle=find("ConnectPage::connect-button")[0])
         wait_for(lambda: not find("ConnectPage::connect-button"))
         screenshot("overview")
+        if int(args.size.split("x")[0]) >= 720:
+            click_label("切换主题")
+            time.sleep(.2)
+            screenshot("theme-light")
+            click_label("切换主题")
+            time.sleep(.2)
+            screenshot("theme-dark")
         if int(args.size.split("x")[0])<720:
             header=properties(find("AppWindow::mobile-header")[0])
             for identifier in ["mobile-endpoints-button", "mobile-language-button"]:

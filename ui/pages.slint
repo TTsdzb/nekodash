@@ -35,7 +35,7 @@ export component ConnectPage inherits Rectangle {
                     VerticalLayout { Text { vertical-alignment: center; text: endpoint.label; color: Theme.text; font-size: 14px; overflow: elide; } Text { vertical-alignment: center; text: endpoint.url; color: Theme.muted; font-size: 11px; overflow: elide; } }
                     ActionButton { icon: 7; active: endpoint.selected; clicked => { Actions.invoke("switch", endpoint.id, ""); } accessible-label: I18n.tr("connect"); }
                     ActionButton { text: I18n.tr("edit"); clicked => { Actions.invoke("edit-endpoint", endpoint.id, ""); } }
-                    ActionButton { text: "×"; clicked => { Actions.invoke("remove-endpoint", endpoint.id, ""); } accessible-label: I18n.tr("delete"); }
+                    ActionButton { icon: 18; clicked => { Actions.invoke("remove-endpoint", endpoint.id, ""); } accessible-label: I18n.tr("delete"); }
                 }
             }
         }
@@ -121,7 +121,9 @@ component ProxyGroup inherits Card {
             if ViewData.tab == 1 : ActionButton { text: I18n.tr("update"); enabled: !ViewData.busy; clicked => { Actions.invoke("update-provider", root.data.name, ""); } }
         }
         HorizontalLayout { height: 20px; spacing: 8px;
-            Text { vertical-alignment: center; text: root.data.kind + "  ›  " + root.data.current; font-size: 12px; color: Theme.accent; overflow: elide; horizontal-stretch: 1; }
+            Text { vertical-alignment: center; text: root.data.kind; font-size: 12px; color: Theme.accent; }
+            Icon { kind: 14; width: 16px; height: 20px; colorize: Theme.accent; }
+            Text { vertical-alignment: center; text: root.data.current; font-size: 12px; color: Theme.accent; overflow: elide; horizontal-stretch: 1; }
             if root.data.fixed : ActionButton { text: I18n.tr("auto"); clicked => { Actions.invoke("unfix", root.data.name, ""); } }
         }
         if root.data.expanded : VerticalLayout {

@@ -13,6 +13,8 @@ export component Icon inherits Image {
         : root.kind == 8 ? @image-url("icons/up.svg") : root.kind == 9 ? @image-url("icons/down.svg")
         : root.kind == 10 ? @image-url("icons/refresh.svg") : root.kind == 11 ? @image-url("icons/more.svg")
         : root.kind == 13 ? @image-url("icons/chevron-down.svg") : root.kind == 14 ? @image-url("icons/chevron-right.svg")
+        : root.kind == 16 ? @image-url("icons/moon.svg") : root.kind == 17 ? @image-url("icons/sun.svg")
+        : root.kind == 18 ? @image-url("icons/close.svg") : root.kind == 19 ? @image-url("icons/sort.svg")
         : root.kind == 15 ? @image-url("icons/switch.svg") : @image-url("icons/language.svg");
 }
 
@@ -124,7 +126,7 @@ export component DataTable inherits Card {
                 HorizontalLayout {
                     padding-left: 12px; padding-right: 8px; spacing: 6px;
                     Text { vertical-alignment: center; text: column.title; font-size: 12px; color: sort-header.sorted ? Theme.accent : Theme.muted; font-weight: 600; overflow: elide; horizontal-stretch: 1; }
-                    Text { width: 12px; vertical-alignment: center; horizontal-alignment: center; text: sort-header.sorted ? (ViewData.sort-descending ? "↓" : "↑") : "↕"; color: sort-header.sorted ? Theme.accent : Theme.muted; font-size: 13px; accessible-role: none; }
+                    Rectangle { width: 16px; Icon { width: 16px; height: 16px; y: (parent.height - self.height) / 2; kind: sort-header.sorted ? (ViewData.sort-descending ? 9 : 8) : 19; colorize: sort-header.sorted ? Theme.accent : Theme.muted; accessible-role: none; } }
                 }
                 header-focus := FocusScope {
                     key-pressed(event) => {

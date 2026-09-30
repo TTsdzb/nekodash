@@ -24,6 +24,8 @@ jobs:
       - name: Linux UI dependencies
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev libxkbcommon-dev libudev-dev
+      - name: Check UI icons
+        run: python scripts/check_ui_icons.py
       - name: Format
         run: cargo +1.98.1 fmt --all -- --check
       - name: Lint

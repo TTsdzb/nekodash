@@ -644,7 +644,7 @@ impl App {
                                     bytes(c.download),
                                     bytes(c.upload),
                                     format!("{} {}", c.rule, c.rule_payload),
-                                    c.chains.join(" › "),
+                                    c.chains.join(" / "),
                                     c.start.clone(),
                                 ],
                                 true,

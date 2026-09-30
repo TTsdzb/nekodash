@@ -91,7 +91,7 @@ export component AppWindow inherits Window {
                     Text { vertical-alignment: center; text: ViewData.stats[0].value + "\n" + ViewData.stats[1].value; font-size: 10px; color: Theme.muted; horizontal-alignment: center; }
                     ActionButton { icon: 7; text: ViewData.sidebar-expanded ? ViewData.endpoint-label : ""; accessible-label: I18n.tr("switchEndpoint"); clicked => { Actions.invoke("endpoints", "", ""); } }
                     language-button := ActionButton { icon: 12; accessible-label: I18n.tr("switchLanguage"); clicked => { Actions.invoke("language", "", ""); } }
-                    ActionButton { text: Theme.dark ? "☾" : "☀"; accessible-label: I18n.tr("switchTheme"); clicked => { Actions.invoke("theme", "", ""); Palette.color-scheme = Theme.dark ? ColorScheme.dark : ColorScheme.light; } }
+                    ActionButton { icon: Theme.dark ? 16 : 17; accessible-label: I18n.tr("switchTheme"); clicked => { Actions.invoke("theme", "", ""); Palette.color-scheme = Theme.dark ? ColorScheme.dark : ColorScheme.light; } }
                 }
             }
             VerticalLayout {
@@ -148,7 +148,7 @@ export component AppWindow inherits Window {
             background: Theme.panel; border-width: 1px; border-color: ViewData.message-error ? Theme.error : Theme.success; border-radius: 10px;
             notice := HorizontalLayout { padding: 12px; spacing: 12px;
                 Text { vertical-alignment: center; text: ViewData.message; color: Theme.text; font-size: 13px; wrap: word-wrap; horizontal-stretch: 1; }
-                ActionButton { text: "×"; accessible-label: I18n.tr("close"); clicked => { ViewData.message = ""; } }
+                ActionButton { icon: 18; accessible-label: I18n.tr("close"); clicked => { ViewData.message = ""; } }
             }
         }
         if ViewData.dialog-visible || ViewData.settings-visible : Rectangle {
