@@ -124,6 +124,16 @@ impl App {
                     close_connections(&c, ids).await
                 });
             }
+            "group-search" => {
+                if value.is_empty() {
+                    self.settings.proxy_group_search_queries.remove(key);
+                } else {
+                    self.settings
+                        .proxy_group_search_queries
+                        .insert(key.into(), value.into());
+                }
+                self.save();
+            }
             "expand" => {
                 if !self.collapsed.remove(key) {
                     self.collapsed.insert(key.into());
@@ -374,6 +384,9 @@ impl App {
         match parsed {
             Ok(()) => {
                 let logs_changed = candidate.log_level != self.settings.log_level;
+                if self.settings.track_traffic != candidate.track_traffic {
+                    self.data.reset_usage_baseline();
+                }
                 self.settings = candidate;
                 self.apply_preferences();
                 self.save();
@@ -439,7 +452,12 @@ impl App {
             let previous = self.settings.clone();
             match key {
                 "dark" => self.invoke("theme", "", ""),
-                "track" => self.settings.track_traffic = value == "true",
+                "track" => {
+                    if self.settings.track_traffic != (value == "true") {
+                        self.data.reset_usage_baseline();
+                    }
+                    self.settings.track_traffic = value == "true";
+                }
                 "default" => {
                     self.settings.default_page = [
                         "overview",
@@ -664,6 +682,7 @@ impl App {
                 });
             }
             "reset-settings" => {
+                self.data.reset_usage_baseline();
                 self.settings = Settings::default();
                 self.save();
                 self.apply_preferences();
@@ -697,6 +716,7 @@ impl App {
         });
         match result {
             Ok(backup) if kind == "settings" => {
+                self.data.reset_usage_baseline();
                 self.settings = backup.settings;
                 self.store = backup.endpoints;
                 self.save();

@@ -2,6 +2,22 @@ use super::*;
 use data::{bytes, host, metadata, process, value_text};
 use serde_json::Value;
 
+fn tun_stack(value: &str) -> (String, Vec<String>) {
+    let mut options: Vec<String> = ["Mixed", "gVisor", "System", "Mips"]
+        .map(String::from)
+        .to_vec();
+    let value = if value.is_empty() { "Mixed" } else { value };
+    let normalized = options
+        .iter()
+        .find(|v| v.eq_ignore_ascii_case(value))
+        .cloned()
+        .unwrap_or_else(|| value.to_owned());
+    if !options.contains(&normalized) {
+        options.push(normalized.clone());
+    }
+    (normalized, options)
+}
+
 fn strings(values: impl IntoIterator<Item = String>) -> ModelRc<SharedString> {
     model(values.into_iter().map(Into::into).collect())
 }
@@ -411,6 +427,12 @@ impl App {
                 if group.all.is_empty() || group.hidden || !seen.insert(group.name.clone()) {
                     continue;
                 }
+                let group_query = self
+                    .settings
+                    .proxy_group_search_queries
+                    .get(&group.name)
+                    .map(String::as_str)
+                    .unwrap_or_default();
                 let matches = group.name.to_lowercase().contains(&query);
                 let mut nodes: Vec<_> = group
                     .all
@@ -427,6 +449,11 @@ impl App {
                 if !query.is_empty() && !matches && nodes.is_empty() {
                     continue;
                 }
+                nodes.retain(|node| {
+                    node.name
+                        .to_lowercase()
+                        .contains(&group_query.trim().to_lowercase())
+                });
                 self.sort_nodes(&mut nodes);
                 groups.push(GroupRow {
                     name: group.name.clone().into(),
@@ -443,6 +470,7 @@ impl App {
                     current: group.now.clone().into(),
                     fixed: group.fixed.as_ref().is_some_and(|v| !v.is_empty()),
                     expanded: !self.collapsed.contains(&group.name),
+                    search_query: group_query.into(),
                     count: group.all.len().to_string().into(),
                     nodes: model(nodes),
                 });
@@ -484,6 +512,7 @@ impl App {
                     current: current.into(),
                     fixed: false,
                     expanded: !self.collapsed.contains(&provider.name),
+                    search_query: SharedString::default(),
                     count: provider.proxies.len().to_string().into(),
                     nodes: model(nodes),
                 });
@@ -1093,21 +1122,21 @@ impl App {
                 let options: Vec<String> = match key {
                     "mode" => vec!["rule", "global", "direct"],
                     "log-level" => vec!["debug", "info", "warning", "error", "silent"],
-                    "tun.stack" => vec!["Mixed", "System", "gVisor"],
+                    "tun.stack" => vec!["Mixed", "gVisor", "System", "Mips"],
                     "dns.enhanced-mode" => vec!["fake-ip", "redir-host"],
                     _ => vec![],
                 }
                 .into_iter()
                 .map(String::from)
                 .collect();
-                text(
-                    key,
-                    label,
-                    value.map(value_text).unwrap_or_default(),
-                    kind,
-                    value.and_then(Value::as_bool).unwrap_or(false),
-                    options,
-                )
+                let checked = value.and_then(Value::as_bool).unwrap_or(false);
+                let raw = value.map(value_text).unwrap_or_default();
+                let (value, options) = if key == "tun.stack" {
+                    tun_stack(&raw)
+                } else {
+                    (raw, options)
+                };
+                text(key, label, value, kind, checked, options)
             })
             .collect()
     }
@@ -1138,6 +1167,23 @@ mod tests {
     fn row_keys(rows: &[TableRow]) -> Vec<String> {
         rows.iter().map(|row| row.view.key.to_string()).collect()
     }
+    #[test]
+    fn tun_stack_normalizes_known_values_and_preserves_unknown_values() {
+        for (raw, expected) in [
+            ("mixed", "Mixed"),
+            ("GVISOR", "gVisor"),
+            ("system", "System"),
+            ("mips", "Mips"),
+            ("", "Mixed"),
+            ("FutureStack", "FutureStack"),
+        ] {
+            let (value, options) = tun_stack(raw);
+            assert_eq!(value, expected);
+            assert!(options.contains(&value));
+            assert!(!options.iter().any(|v| v.eq_ignore_ascii_case("lwip")));
+        }
+    }
+
     #[test]
     fn sorts_raw_bytes_even_when_display_values_are_identical() {
         assert_eq!(bytes(1024), bytes(1025));

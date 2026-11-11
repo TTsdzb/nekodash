@@ -18,6 +18,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 parser = argparse.ArgumentParser()
 parser.add_argument('--binary', default='target/debug/nekodash')
 parser.add_argument('--output', default='target/ui-log-stress')
+parser.add_argument('--tun-config', action='store_true')
 parser.add_argument('--page', choices=['overview','logs'], default='overview')
 args = parser.parse_args()
 output = Path(args.output).resolve()
@@ -25,6 +26,9 @@ output.mkdir(parents=True, exist_ok=True)
 start = threading.Event()
 stop = threading.Event()
 finished = threading.Event()
+tun_config={'enable':False,'stack':'FutureStack'}
+patches=[]
+accept_patch=threading.Event()
 
 def frame(value):
     data = json.dumps(value).encode()
@@ -34,6 +38,21 @@ class Core(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     def log_message(self, *_):
         pass
+
+    def do_PATCH(self):
+        body=json.loads(self.rfile.read(int(self.headers.get('Content-Length','0'))))
+        patches.append(body)
+        if accept_patch.is_set():
+            tun_config.update(body.get('tun',{}))
+            self.send_response(204)
+            self.send_header('Content-Length','0')
+            self.end_headers()
+            return
+        response=json.dumps({'message':'fixture rejects TUN change'}).encode()
+        self.send_response(400)
+        self.send_header('Content-Type','application/json')
+        self.send_header('Content-Length',str(len(response)))
+        self.end_headers(); self.wfile.write(response)
 
     def do_GET(self):
         path=self.path.split('?')[0]
@@ -62,7 +81,7 @@ class Core(BaseHTTPRequestHandler):
             except (BrokenPipeError,ConnectionResetError):
                 pass
             return
-        values={'/version':{'version':'stress'},'/configs':{'mode':'rule'},'/proxies':{'proxies':{}},'/providers/proxies':{'providers':{}},'/rules':{'rules':[]},'/providers/rules':{'providers':{}},'/connections':{'downloadTotal':0,'uploadTotal':0,'connections':[]}}
+        values={'/version':{'version':'stress'},'/configs':{'mode':'rule','tun':tun_config},'/proxies':{'proxies':{}},'/providers/proxies':{'providers':{}},'/rules':{'rules':[]},'/providers/rules':{'providers':{}},'/connections':{'downloadTotal':0,'uploadTotal':0,'connections':[]}}
         body=json.dumps(values.get(path,{})).encode()
         self.send_response(200)
         self.send_header('Content-Type','application/json')
@@ -109,6 +128,43 @@ try:
                 if nav: break
                 time.sleep(.1)
             else: raise RuntimeError('Core did not connect')
+            if args.tun_config:
+                def find(identifier):
+                    return result(rpc('find_elements_by_id',windowHandle=window,elementsId=identifier)).get('elementHandles',[])
+                def props(handle):
+                    return result(rpc('get_element_properties',elementHandle=handle))
+                rpc('click_element',elementHandle=nav[6]); time.sleep(.5)
+                choices=find('ConfigPage::config-choice')
+                choice=next(h for h in choices if props(h).get('accessibleLabel')=='TUN 模式堆栈')
+                assert props(choice).get('accessibleValue')=='FutureStack'
+                capture('tun-unknown-current')
+                rpc('click_element',elementHandle=choice); time.sleep(.2)
+                root=result(rpc('get_window_properties',windowHandle=window))['rootElementHandle']
+                tree=result(rpc('get_element_tree',elementHandle=root,maxElements=1500))
+                (output/'tun-popup.json').write_text(json.dumps(tree,ensure_ascii=False,indent=2))
+                items=[i for i in tree['elements'] if i.get('accessibleLabel')=='Mips']
+                assert items, 'Mips option missing'
+                rpc('click_element',elementHandle=items[0]['handle']); time.sleep(1)
+                assert patches and patches[-1]=={'tun':{'stack':'Mips'}}, patches
+                assert props(choice).get('accessibleValue')=='FutureStack', props(choice)
+                toggle=next(h for h in find('ConfigPage::config-toggle') if 'TUN' in props(h).get('accessibleLabel',''))
+                rpc('click_element',elementHandle=toggle); time.sleep(1)
+                assert patches[-1]=={'tun':{'enable':True}}, patches
+                capture('tun-rejected-restored')
+                (output/'tun-toggle.json').write_text(json.dumps(props(toggle),ensure_ascii=False,indent=2))
+                assert props(toggle).get('accessibleChecked',False) is False, props(toggle)
+                assert find('AppWindow::toast'), 'Rejected save should explain the error'
+                accept_patch.set()
+                rpc('click_element',elementHandle=choice); time.sleep(.2)
+                tree=result(rpc('get_element_tree',elementHandle=root,maxElements=1500))
+                item=next(i for i in tree['elements'] if i.get('accessibleLabel')=='Mips')
+                rpc('click_element',elementHandle=item['handle']); time.sleep(1)
+                assert props(choice).get('accessibleValue')=='Mips', props(choice)
+                rpc('click_element',elementHandle=toggle); time.sleep(1)
+                assert props(toggle).get('accessibleChecked',False) is True, props(toggle)
+                capture('tun-accepted')
+                print('PASS: unknown TUN stack retained, Mips offered, rejected changes restored and successful changes displayed')
+                raise SystemExit(0)
             if args.page=='logs':
                 rpc('click_element',elementHandle=nav[5])
             capture("before-burst")

@@ -20,6 +20,7 @@ pub struct Settings {
     pub test_timeout_ms: u32,
     pub test_concurrency: usize,
     pub proxy_sort: usize,
+    pub proxy_group_search_queries: BTreeMap<String, String>,
     pub display_mode: usize,
     pub close_after_select: bool,
     pub log_limit: usize,
@@ -41,6 +42,7 @@ impl Default for Settings {
             test_timeout_ms: 5000,
             test_concurrency: 8,
             proxy_sort: 0,
+            proxy_group_search_queries: BTreeMap::new(),
             display_mode: 0,
             close_after_select: true,
             log_limit: 1000,
@@ -148,7 +150,17 @@ mod tests {
             language: "ja".into(),
             ..Settings::default()
         };
+        settings
+            .proxy_group_search_queries
+            .insert("Proxy".into(), "Tokyo".into());
+        settings
+            .proxy_group_search_queries
+            .insert("Streaming".into(), "HK".into());
         write_atomic(&path, &serde_json::to_vec(&settings)?)?;
+        assert_eq!(
+            Settings::load(&path)?.proxy_group_search_queries,
+            settings.proxy_group_search_queries
+        );
         assert_eq!(Settings::load(&path)?.language, "ja");
         settings.test_concurrency = 33;
         assert!(settings.validate().is_err());

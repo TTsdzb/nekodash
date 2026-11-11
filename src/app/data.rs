@@ -46,8 +46,13 @@ pub struct Data {
     pub memories: VecDeque<u64>,
     pub counts: VecDeque<u64>,
     pub last_connections: Option<std::time::Instant>,
+    usage_baseline_ready: bool,
 }
 impl Data {
+    pub fn reset_usage_baseline(&mut self) {
+        self.usage_baseline_ready = false;
+    }
+
     /// Named policy groups may refer to nodes returned only by the provider API.
     pub fn proxy(&self, name: &str) -> Option<(Option<&str>, &Proxy)> {
         self.proxies
@@ -163,7 +168,7 @@ impl Data {
                     )
                 })
                 .unwrap_or((0, 0));
-            if track {
+            if track && self.usage_baseline_ready {
                 let source = metadata(&connection, "sourceIP");
                 let host = host(&connection);
                 let process = process(&connection);
@@ -214,6 +219,7 @@ impl Data {
             self.closed.pop_back();
         }
         self.connections = next;
+        self.usage_baseline_ready = true;
         self.last_connections = Some(now);
         self.counts.push_back(self.connections.len() as u64);
         trim(&mut self.counts, 120);
@@ -322,6 +328,7 @@ mod tests {
     fn retains_newest_closed_connections_and_full_first_sample()
     -> Result<(), Box<dyn std::error::Error>> {
         let mut data = Data::default();
+        data.update_connections(Connections::default(), 2, false);
         for id in ["a", "b", "c", "d"] {
             data.update_connections(snapshot(id, 20, 40)?, 2, true);
         }
@@ -336,6 +343,28 @@ mod tests {
         assert_eq!((usage.upload, usage.download, usage.count), (80, 160, 4));
         Ok(())
     }
+    #[test]
+    fn first_stream_and_tracking_toggle_establish_fresh_baselines()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let mut data = Data::default();
+        data.update_connections(snapshot("a", 1000, 2000)?, 2, true);
+        assert!(data.usage.is_empty());
+        data.update_connections(snapshot("a", 1100, 2100)?, 2, true);
+        data.reset_usage_baseline(); // Disable and enable between two snapshots.
+        data.reset_usage_baseline();
+        data.update_connections(snapshot("a", 5000, 6000)?, 2, true);
+        data.update_connections(snapshot("a", 5010, 6020)?, 2, true);
+        let usage = data.usage.values().next().ok_or("missing usage")?;
+        assert_eq!((usage.upload, usage.download), (110, 120));
+        data.update_connections(Connections::default(), 2, true);
+        assert!(data.connections.is_empty());
+        assert_eq!(data.closed.len(), 1);
+        data.update_connections(snapshot("b", 30, 40)?, 2, true);
+        let total: u64 = data.usage.values().map(|v| v.upload).sum();
+        assert_eq!(total, 140); // A genuinely new connection includes its first sample.
+        Ok(())
+    }
+
     #[test]
     fn group_selection_targets_only_matching_connections() -> Result<(), Box<dyn std::error::Error>>
     {

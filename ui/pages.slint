@@ -1,5 +1,5 @@
 import { LineEdit, TextEdit, ComboBox, CheckBox, ScrollView, Spinner } from "std-widgets.slint";
-import { ViewData, Actions, Theme, I18n, GroupRow, NodeRow } from "state.slint";
+import { ViewData, Actions, Theme, I18n, GroupRow, NodeRow, ConfigRow } from "state.slint";
 import { Icon, ActionButton, Card, SectionTitle, ChartCard, DataTable } from "widgets.slint";
 
 export component ConnectPage inherits Rectangle {
@@ -104,8 +104,10 @@ component ProxyNode inherits Rectangle {
 }
 
 component ProxyGroup inherits Card {
-    preferred-height: 100px + (root.data.expanded ? ceil(root.data.nodes.length / root.cols) * (ViewData.display-mode == 1 ? 52px : 90px) : 0px);
+    preferred-height: 100px + (root.no-match ? 24px : 0px) + (root.data.expanded ? ceil(root.data.nodes.length / root.cols) * (ViewData.display-mode == 1 ? 52px : 90px) : 0px);
     in property <GroupRow> data;
+    private property <bool> search-open: false;
+    private property <bool> no-match: ViewData.tab == 0 && root.data.search-query != "" && root.data.nodes.length == 0;
     private property <int> cols: ViewData.display-mode == 1 ? 1 : max(1, floor((self.width - 28px) / 155px));
     VerticalLayout { padding: 14px; spacing: 12px;
         HorizontalLayout {
@@ -117,6 +119,26 @@ component ProxyGroup inherits Card {
             }
             Text { vertical-alignment: center; text: root.data.name; font-size: 16px; font-weight: 600; color: Theme.text; overflow: elide; horizontal-stretch: 1; }
             Text { vertical-alignment: center; text: root.data.count; font-size: 12px; color: Theme.muted; }
+            if ViewData.tab == 0 : HorizontalLayout {
+                spacing: 4px; horizontal-stretch: 0;
+                group-search := LineEdit {
+                    visible: root.search-open || root.data.search-query != "";
+                    width: self.visible ? (root.width > 600px ? 160px : 96px) : 0px;
+                    text: root.data.search-query;
+                    placeholder-text: I18n.tr("filterNodesByName");
+                    accessible-label: I18n.tr("filterNodesByName") + " · " + root.data.name;
+                    edited(value) => { Actions.invoke("group-search", root.data.name, value); }
+                }
+                if root.search-open || root.data.search-query != "" : ActionButton {
+                    icon: 18; min-width: 24px; preferred-width: 24px;
+                    accessible-label: I18n.tr("clear") + " · " + root.data.name;
+                    clicked => { root.search-open = false; Actions.invoke("group-search", root.data.name, ""); }
+                }
+                if !root.search-open && root.data.search-query == "" : ActionButton {
+                    icon: 20; accessible-label: I18n.tr("filterNodesByName") + " · " + root.data.name;
+                    clicked => { root.search-open = true; group-search.focus(); }
+                }
+            }
             ActionButton { icon: 10; enabled: !ViewData.testing && !ViewData.busy; clicked => { Actions.invoke(ViewData.tab == 0 ? "test-group" : "test-provider", root.data.name, ""); } accessible-label: I18n.tr("latencyTest"); }
             if ViewData.tab == 1 : ActionButton { text: I18n.tr("update"); enabled: !ViewData.busy; clicked => { Actions.invoke("update-provider", root.data.name, ""); } }
         }
@@ -126,6 +148,7 @@ component ProxyGroup inherits Card {
             Text { vertical-alignment: center; text: root.data.current; font-size: 12px; color: Theme.accent; overflow: elide; horizontal-stretch: 1; }
             if root.data.fixed : ActionButton { text: I18n.tr("auto"); clicked => { Actions.invoke("unfix", root.data.name, ""); } }
         }
+        if root.no-match : Text { height: 12px; text: I18n.tr("noData"); color: Theme.muted; font-size: 11px; }
         if root.data.expanded : VerticalLayout {
             spacing: 8px;
             for row in ceil(root.data.nodes.length / root.cols) : HorizontalLayout {
@@ -162,6 +185,31 @@ export component ProxiesPage inherits Rectangle {
     if ViewData.groups.length == 0 : Text { vertical-alignment: center; text: I18n.tr("noData"); color: Theme.muted; }
 }
 
+component ConfigChoice inherits ComboBox {
+    in property <ConfigRow> setting;
+    private property <bool> saving: ViewData.busy;
+    model: root.setting.options;
+    current-index: root.setting.choice-index;
+    changed setting => { root.current-index = root.setting.choice-index; }
+    enabled: !root.saving;
+    selected(value) => {
+        root.current-index = root.setting.choice-index;
+        Actions.invoke("config", root.setting.key, value);
+    }
+}
+component ConfigToggle inherits CheckBox {
+    in property <ConfigRow> setting;
+    private property <bool> saving: ViewData.busy;
+    checked: root.setting.checked;
+    changed setting => { root.checked = root.setting.checked; }
+    enabled: !root.saving;
+    toggled => {
+        let value = self.checked;
+        root.checked = root.setting.checked;
+        Actions.invoke("config", root.setting.key, value ? "true" : "false");
+    }
+}
+
 export component ConfigPage inherits Rectangle {
     ScrollView {
         content-width: self.width;
@@ -172,12 +220,12 @@ export component ConfigPage inherits Rectangle {
                     for setting in ViewData.config-rows : HorizontalLayout {
                         spacing: 12px; min-height: 42px;
                         Text { vertical-alignment: center; text: setting.label; color: Theme.text; font-size: 13px; wrap: word-wrap; horizontal-stretch: 1; }
-                        if setting.kind == 0 : CheckBox { horizontal-stretch: 0; checked: setting.checked; toggled => { Actions.invoke("config", setting.key, self.checked ? "true" : "false"); } enabled: !ViewData.busy; }
+                        if setting.kind == 0 : config-toggle := ConfigToggle { horizontal-stretch: 0; setting: setting; accessible-label: setting.label; }
                         if setting.kind == 1 : HorizontalLayout { width: min(290px, root.width / 2); spacing: 6px;
                             field := LineEdit { text: setting.value; accepted => { Actions.invoke("config", setting.key, self.text); } enabled: !ViewData.busy; }
                             if field.text != setting.value : ActionButton { text: I18n.tr("save"); enabled: !ViewData.busy; clicked => { Actions.invoke("config", setting.key, field.text); } }
                         }
-                        if setting.kind == 2 : ComboBox { width: min(240px, root.width / 2); model: setting.options; current-index: setting.choice-index; selected(value) => { Actions.invoke("config", setting.key, value); } enabled: !ViewData.busy; }
+                        if setting.kind == 2 : config-choice := ConfigChoice { width: min(240px, root.width / 2); setting: setting; accessible-label: setting.label; }
                     }
                 }
             }

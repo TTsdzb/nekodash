@@ -22,6 +22,7 @@ parser.add_argument("--size", default="1280x820")
 parser.add_argument("--output", default="target/ui-smoke")
 parser.add_argument("--proxy-scroll-only", action="store_true")
 parser.add_argument("--group-icons-only", action="store_true")
+parser.add_argument("--group-search-only", action="store_true")
 args = parser.parse_args()
 if not args.mihomo:
     parser.error("Provide --mihomo with a test executable")
@@ -343,6 +344,55 @@ try:
             time.sleep(.3)
         navigate(1)
         screenshot("proxies")
+        if args.group_search_only:
+            def search_field(group):
+                return next(h for h in find("ProxyGroup::group-search")
+                            if properties(h).get('accessibleLabel','').endswith(' · '+group) and properties(h)['size']['width']>0)
+            def set_group_query(group, query):
+                try: field=search_field(group)
+                except StopIteration:
+                    click_label('按名称筛选节点 · '+group)
+                    field=search_field(group)
+                    rpc('dispatch_key_event',windowHandle=window,text='x')
+                    time.sleep(.1)
+                    assert properties(field).get('accessibleValue')=='x', 'Search button should focus the input'
+                rpc('set_element_value',elementHandle=field,value=query)
+                time.sleep(.3)
+            def visible_nodes():
+                return [item.get('accessibleLabel','') for item in elements()
+                        if item.get('accessibleRole')=='Button' and item.get('accessibleLabel','').startswith('延迟测试 · ')]
+            set_group_query('Proxy','Tokyo')
+            set_group_query('Streaming','Singapore')
+            screenshot('group-search-independent')
+            click_label('收起 · Proxy')
+            set_group_query('Proxy','not-found')
+            screenshot('group-search-collapsed-empty')
+            set_group_query('Proxy','Tokyo')
+            click_label('展开 · Proxy')
+            global_search=find('PageToolbar::search-input')[0]
+            rpc('set_element_value',elementHandle=global_search,value='01')
+            time.sleep(.3)
+            assert '延迟测试 · Tokyo 02' not in visible_nodes()
+            screenshot('group-search-intersection')
+            rpc('set_element_value',elementHandle=global_search,value='')
+            navigate(0); navigate(1)
+            assert properties(search_field('Proxy')).get('accessibleValue')=='Tokyo'
+            assert properties(search_field('Streaming')).get('accessibleValue')=='Singapore'
+            wait_for(lambda: json.loads((home/'settings/settings.json').read_text()).get('proxy_group_search_queries')=={'Proxy':'Tokyo','Streaming':'Singapore'})
+            app.terminate(); app.wait(timeout=10)
+            app=subprocess.Popen([str(Path(args.binary).resolve())],stdout=app_log,stderr=app_log,env=app_env)
+            wait_for(lambda: result(rpc('list_windows')).get('windowHandles',[]))
+            window=result(rpc('list_windows'))['windowHandles'][0]
+            wait_for(lambda: find('AppWindow::nav-button') or find('AppWindow::mobile-nav'))
+            navigate(1)
+            wait_for(lambda: sum(properties(h)['size']['width']>0 for h in find('ProxyGroup::group-search'))>=2)
+            assert properties(search_field('Proxy')).get('accessibleValue')=='Tokyo'
+            assert properties(search_field('Streaming')).get('accessibleValue')=='Singapore'
+            screenshot('group-search-restored')
+            click_label('清除 · Proxy')
+            wait_for(lambda: json.loads((home/'settings/settings.json').read_text()).get('proxy_group_search_queries')=={'Streaming':'Singapore'})
+            print('PASS: independent search, collapse, global intersection, navigation, restart and clear')
+            raise SystemExit(0)
         if args.group_icons_only:
             wait_for(lambda:len(find("ProxyGroup::group-icon"))>=2)
             time.sleep(.5)
