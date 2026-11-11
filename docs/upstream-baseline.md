@@ -3,12 +3,23 @@
 ## 固定版本
 
 - 项目：[MetaCubeX/metacubexd](https://github.com/MetaCubeX/metacubexd)
-- Tag：[`v1.273.1`](https://github.com/MetaCubeX/metacubexd/releases/tag/v1.273.1)
-- 提交：`8bbc8f58fef71148a94fb5c0ff808f79b057337d`
-- 登记日期：2026-09-27
+- Tag：[`v1.274.6`](https://github.com/MetaCubeX/metacubexd/releases/tag/v1.274.6)
+- 提交：`f21eb1d4621c984514e8ca2d055480e0d5d491bd`
+- 登记日期：2026-11-12
 - 参考形态：浏览器面板连接已有核心。
 - 核心兼容目标：MetaCubeX 官方 Mihomo。
 - 验收：页面布局、信息内容、功能和交互；主题采用 Nekodash 的配色。
+
+## 基线历史
+
+| 登记日期 | 版本 | 提交 |
+| --- | --- | --- |
+| 2026-09-27 | v1.273.1 | `8bbc8f58fef71148a94fb5c0ff808f79b057337d` |
+| 2026-11-12 | v1.274.6 | `f21eb1d4621c984514e8ca2d055480e0d5d491bd` |
+
+本轮同步：代理组独立搜索与持久化、TUN 堆栈选项及配置结果显示、流量统计基准。
+连接排序、近期关闭连接保留和会话隔离沿用现有实现，并完成回归验证。
+验证场景及平台范围见 [验证记录](verification.md#2026-11-12同步-v12746)。
 
 ## 核心通信清单
 
