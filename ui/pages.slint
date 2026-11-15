@@ -97,7 +97,7 @@ component ProxyNode inherits Rectangle {
     node-test := ActionButton {
         x: parent.width - 34px; y: ViewData.display-mode == 1 ? 10px : 8px;
         width: 24px; height: 24px; min-width: 24px; min-height: 24px;
-        icon: 10; enabled: !ViewData.busy && !ViewData.testing;
+        icon: 21; enabled: !ViewData.busy && !ViewData.testing;
         accessible-label: I18n.tr("latencyTest") + " · " + root.data.name;
         clicked => { Actions.invoke("test-node", root.group, root.data.name); }
     }
@@ -139,7 +139,7 @@ component ProxyGroup inherits Card {
                     clicked => { root.search-open = true; group-search.focus(); }
                 }
             }
-            ActionButton { icon: 10; enabled: !ViewData.testing && !ViewData.busy; clicked => { Actions.invoke(ViewData.tab == 0 ? "test-group" : "test-provider", root.data.name, ""); } accessible-label: I18n.tr("latencyTest"); }
+            ActionButton { icon: 21; enabled: !ViewData.testing && !ViewData.busy; clicked => { Actions.invoke(ViewData.tab == 0 ? "test-group" : "test-provider", root.data.name, ""); } accessible-label: I18n.tr("latencyTest"); }
             if ViewData.tab == 1 : ActionButton { text: I18n.tr("update"); enabled: !ViewData.busy; clicked => { Actions.invoke("update-provider", root.data.name, ""); } }
         }
         HorizontalLayout { height: 20px; spacing: 8px;

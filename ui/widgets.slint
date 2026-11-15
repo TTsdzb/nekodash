@@ -6,17 +6,18 @@ export component Icon inherits Image {
     width: 20px;
     height: 20px;
     colorize: Theme.muted;
-    source: root.kind == 0 ? @image-url("icons/home.svg") : root.kind == 1 ? @image-url("icons/globe.svg")
-        : root.kind == 2 ? @image-url("icons/rules.svg") : root.kind == 3 ? @image-url("icons/network.svg")
-        : root.kind == 4 ? @image-url("icons/chart.svg") : root.kind == 5 ? @image-url("icons/logs.svg")
+    source: root.kind == 0 ? @image-url("icons/home.svg") : root.kind == 1 ? @image-url("icons/world.svg")
+        : root.kind == 2 ? @image-url("icons/list-details.svg") : root.kind == 3 ? @image-url("icons/sitemap.svg")
+        : root.kind == 4 ? @image-url("icons/chart-line.svg") : root.kind == 5 ? @image-url("icons/file-text.svg")
         : root.kind == 6 ? @image-url("icons/settings.svg") : root.kind == 7 ? @image-url("icons/server.svg")
-        : root.kind == 8 ? @image-url("icons/up.svg") : root.kind == 9 ? @image-url("icons/down.svg")
-        : root.kind == 10 ? @image-url("icons/refresh.svg") : root.kind == 11 ? @image-url("icons/more.svg")
+        : root.kind == 8 ? @image-url("icons/arrow-up.svg") : root.kind == 9 ? @image-url("icons/arrow-down.svg")
+        : root.kind == 10 ? @image-url("icons/refresh.svg") : root.kind == 11 ? @image-url("icons/dots.svg")
         : root.kind == 13 ? @image-url("icons/chevron-down.svg") : root.kind == 14 ? @image-url("icons/chevron-right.svg")
         : root.kind == 16 ? @image-url("icons/moon.svg") : root.kind == 17 ? @image-url("icons/sun.svg")
+        : root.kind == 21 ? @image-url("icons/gauge.svg")
         : root.kind == 20 ? @image-url("icons/search.svg")
-        : root.kind == 18 ? @image-url("icons/close.svg") : root.kind == 19 ? @image-url("icons/sort.svg")
-        : root.kind == 15 ? @image-url("icons/switch.svg") : @image-url("icons/language.svg");
+        : root.kind == 18 ? @image-url("icons/x.svg") : root.kind == 19 ? @image-url("icons/arrows-sort.svg")
+        : root.kind == 15 ? @image-url("icons/arrows-exchange.svg") : @image-url("icons/language.svg");
 }
 
 export component ActionButton inherits Rectangle {

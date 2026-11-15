@@ -11,7 +11,7 @@
 ## UI 图标
 
 图标使用 `ui/icons/` 中的 SVG，通过统一的 `Icon` 组件显示与着色。
-这些资源是项目手写的线条图标；新增图标保持 24×24 viewBox 和统一描边风格。
+面板图标取自 [Tabler Icons 3.49.0](https://github.com/tabler/tabler-icons/tree/v3.49.0) 的 Outline 系列，与 MetaCubeXD 基线使用的版本一致。新增图标从官方包 `@tabler/icons` 的 `icons/outline/` 复制对应 SVG，保留原文件名，由 Slint 随程序内嵌并按主题着色。MIT 许可见仓库根目录 `LICENSE`。
 需要图标的地方禁止使用字符、Emoji 或图标字体替代，按钮文案、辅助标签和提示使用正常文字。
 提交前运行 `python3 scripts/check_ui_icons.py`；Core CI 同步检查源码中的符号图标。
 
